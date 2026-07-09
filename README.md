@@ -24,15 +24,7 @@ npm run dev      # http://localhost:5173
 npm run build    # production build -> dist/
 npm run preview  # serve the build (PWA/offline install works here, not in dev)
 
-## Family / LAN setup (multiple people, independent collages)
-
-Everyone's data — photos, saved projects, everything — lives in **their own
-browser's storage**, not on any server. So the same running app can be opened
-by several family members at once, each building a completely separate
-collage, with zero risk of overwriting each other. Nothing needs to be shared
-or synced for this to work.
-
-To serve it to other devices on your WiFi:
+To serve it to other devices on your WiFi/Local Network:
 
 ```bash
 npm run dev:lan       # quick, for active development
@@ -41,70 +33,11 @@ npm run build && npm run preview:lan
 ```
 
 Vite prints a `Network:` URL in the terminal, e.g. `http://192.168.1.23:5173`.
-Share that exact URL with family members on the same WiFi — phone, laptop,
+Share that exact URL with members on the same WiFi — phone, laptop,
 tablet, anything with a browser. Each person opens it independently.
 
-Each person's workflow is exactly what you described: build the collage,
-**Export file (.json)** to keep/back up their work, and **Export** the PNG
-when done. Both downloads land in *their own* device's Downloads folder —
-from there they can move the files wherever needed (shared drive, email,
-USB) the normal way.
 
-**Two things worth knowing:**
-- **Offline/PWA install won't activate over a LAN address.** Browsers require
-  a secure context (HTTPS or `localhost`) for service workers, and a plain
-  `http://192.168.x.x` address doesn't qualify. Everything else — editing,
-  saving projects, exporting — works completely normally over LAN; only the
-  "install as an app, works with no network" piece needs `localhost` (i.e.,
-  using the app directly on each person's own machine, not over LAN).
-- **The host machine only serves the app's code, not anyone's work.** If it
-  goes to sleep or the process is stopped, anyone with the app already loaded
-  can keep working uninterrupted (it's a fully offline-capable app once
-  loaded) — they'd just need the host back up to reload the page or connect
-  fresh. Windows users: the first time you run `dev:lan`/`preview:lan`, the
-  firewall may prompt to allow the connection — accept it, or others won't be
-  able to reach it.
-
-## Deploying to Vercel (or any static host)
-
-This is a pure static site — no backend, no API routes, everything runs in
-the visitor's own browser. That means hosting is genuinely zero-config:
-
-1. Push this repo to GitHub.
-2. In Vercel: **New Project** → import the repo. It auto-detects Vite, sets
-   the build command and `dist` output automatically.
-3. Deploy. Every future `git push` auto-deploys; PRs get their own preview URLs.
-
-**`vercel.json` is included** — not required for a basic deploy, but it sets
-cache headers Vercel's auto-detection won't get right on its own, which
-matters specifically because this is a PWA:
-
-- `/assets/*` and the hashed `workbox-*.js` file → cached for a year,
-  `immutable`. Safe because Vite fingerprints these filenames by content —
-  if anything changes, the filename changes too.
-- `sw.js`, `registerSW.js`, `index.html`, and `/` → `max-age=0,
-  must-revalidate`. These control whether visitors ever see a new deployment
-  at all. If `sw.js` itself got cached stale, people could get stuck on an
-  old version of the app indefinitely, even after you ship an update.
-- `manifest.webmanifest` and the PWA icons → a short/moderate cache, since
-  they change rarely but aren't build-hashed.
-
-Verified this maps onto every file the build actually produces (50/50) before
-committing to it — not just eyeballed.
-
-One genuine upgrade over LAN hosting: Vercel serves everything over HTTPS
-automatically, so the PWA/offline-install feature — which couldn't work over
-a local network address, since browsers require a secure context for service
-workers — works correctly for anyone visiting the deployed link.
-
-**Free-tier note:** a personal Vercel project comfortably fits Hobby-plan
-limits for this app — the entire app shell is under 200KB gzipped on a first
-visit (fonts and the HEIC decoder only load if actually used), and it's
-fully cached client-side after that. Your family's photos never touch
-Vercel's bandwidth at all; everything stays local to each person's own
-browser. Hobby is restricted to non-commercial personal use, which this is.
-
-```
+## Feature History
 
 ## What works in Phase 1
 
@@ -450,14 +383,6 @@ support exists — some HEIC variants (odd depth-map or burst-photo formats)
 can still fail inside the decoder itself, and those get reported the same
 way rather than silently dropped.
 
-**Honest limitation:** I don't have a browser or a real `.heic` file in this
-environment, so I verified everything *around* the decoder thoroughly
-(detection logic across realistic MIME/extension combinations, code-splitting,
-offline precaching, TypeScript correctness) but could not run an actual pixel
-decode end-to-end. Please test with a real iPhone photo before relying on it
-for anything important — if a specific HEIC variant fails, the new warning
-banner will at least tell you clearly, with a reason, instead of silently
-dropping it.
 
 ## Added: +/- nudge buttons on every slider
 
@@ -497,7 +422,7 @@ library, already a dependency — no new packages needed:
   real, tested filter already shipping in the dependency you have, so
   reinventing it would have added risk for no benefit.
 
-### 2. Face detection + auto-crop to keep faces in frame
+### 2. Face detection + auto-crop to keep faces in frame <NOT WORKING>
 
 Crop panel → **Detect face & center**. This is the one feature in the app
 that isn't fully self-contained offline, and it's worth explaining exactly
