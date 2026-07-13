@@ -74,10 +74,10 @@ export default function TextPanel() {
 
       <p className="subhead">Style</p>
       <div className="chip-row">
-        <button className={`chip ${isBold ? 'is-active' : ''}`} onClick={() => setStyle(!isBold, isItalic)}>
+        <button className={`chip ${isBold ? 'is-active' : ''}`} onClick={() => setStyle(!isBold, isItalic)} title="Toggle bold">
           Bold
         </button>
-        <button className={`chip ${isItalic ? 'is-active' : ''}`} onClick={() => setStyle(isBold, !isItalic)}>
+        <button className={`chip ${isItalic ? 'is-active' : ''}`} onClick={() => setStyle(isBold, !isItalic)} title="Toggle italic">
           Italic
         </button>
       </div>
@@ -103,6 +103,7 @@ export default function TextPanel() {
             className={`swatch ${sel.fill === c ? 'is-active' : ''}`}
             style={{ background: c }}
             onClick={() => updateItem(sel.id, { fill: c })}
+            title={`Text color ${c}`}
             aria-label={`Text ${c}`}
           />
         ))}

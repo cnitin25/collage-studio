@@ -60,24 +60,24 @@ export default function ArrangePanel() {
   return (
     <CollapsiblePanel title="Arrange">
 <div className="btn-grid-2">
-        <button className="btn" onClick={() => bringToFront(id)}>Bring to front</button>
-        <button className="btn" onClick={() => sendToBack(id)}>Send to back</button>
-        <button className="btn" onClick={() => bringForward(id)}>Forward</button>
-        <button className="btn" onClick={() => sendBackward(id)}>Backward</button>
+        <button className="btn" onClick={() => bringToFront(id)} title="Move to the very top of the stack">Bring to front</button>
+        <button className="btn" onClick={() => sendToBack(id)} title="Move to the very bottom of the stack">Send to back</button>
+        <button className="btn" onClick={() => bringForward(id)} title="Move up one layer">Forward</button>
+        <button className="btn" onClick={() => sendBackward(id)} title="Move down one layer">Backward</button>
       </div>
 
       <p className="subhead">Rotate</p>
       <div className="chip-row">
-        <button className="chip" onClick={() => rotateItem(id, -90)}>↺ 90°</button>
-        <button className="chip" onClick={() => rotateItem(id, 90)}>↻ 90°</button>
+        <button className="chip" onClick={() => rotateItem(id, -90)} title="Rotate 90° counter-clockwise">↺ 90°</button>
+        <button className="chip" onClick={() => rotateItem(id, 90)} title="Rotate 90° clockwise">↻ 90°</button>
       </div>
 
       {sel.type === 'image' && (
         <>
           <p className="subhead">Flip</p>
           <div className="chip-row">
-            <button className="chip" onClick={() => flipItem(id, 'x')}>Flip H</button>
-            <button className="chip" onClick={() => flipItem(id, 'y')}>Flip V</button>
+            <button className="chip" onClick={() => flipItem(id, 'x')} title="Flip horizontally (mirror left-right)">Flip H</button>
+            <button className="chip" onClick={() => flipItem(id, 'y')} title="Flip vertically (mirror top-bottom)">Flip V</button>
           </div>
 
           <div className="sliders" style={{ marginTop: 14 }}>

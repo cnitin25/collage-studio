@@ -55,7 +55,7 @@ export default function CustomSizeFields({ width, height, onApply }: Props) {
             onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget.blur(), apply())}
           />
         </label>
-        <button className="btn" onClick={apply}>Apply</button>
+        <button className="btn" onClick={apply} title="Apply this custom canvas size">Apply</button>
       </div>
       <p className="dim small">Custom size, {MIN}–{MAX}px per side</p>
     </div>

@@ -19,6 +19,7 @@ import { FRAMES, type FrameId } from '../style/frames';
 import { ENHANCE_PRESETS, DEFAULT_PRESET_STRENGTH, NEUTRAL_FILTERS, scaleEnhanceFilters } from '../style/enhancePresets';
 import type { SerializedState } from '../storage/projects';
 import { uid } from '../utils/id';
+import { revokeUnusedImageUrls } from '../utils/blobUrls';
 
 interface Snapshot {
   items: CollageItem[];
@@ -344,6 +345,7 @@ export const useEditorStore = create<EditorState>()(
       const { selectedId } = get();
       if (!selectedId) return;
       const prev = snapshot(get());
+      const removed = get().items.filter((it) => it.id === selectedId);
       set((s) => {
         if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
         s.past.push(prev);
@@ -354,6 +356,8 @@ export const useEditorStore = create<EditorState>()(
         s.croppingId = null;
         s.editingId = null;
       });
+      const after = get();
+      revokeUnusedImageUrls(removed, [after.items, ...after.past.map((p) => p.items), ...after.future.map((p) => p.items)]);
     },
 
     duplicateSelected: () => {
@@ -500,6 +504,7 @@ export const useEditorStore = create<EditorState>()(
       const label = 'Clear all';
       if (get().items.length === 0) return;
       const prev = snapshot(get());
+      const removed = get().items;
       set((s) => {
         if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
         s.past.push(prev);
@@ -511,6 +516,8 @@ export const useEditorStore = create<EditorState>()(
         s.editingId = null;
         s.lastLayout = null;
       });
+      const after = get();
+      revokeUnusedImageUrls(removed, [after.items, ...after.past.map((p) => p.items), ...after.future.map((p) => p.items)]);
     },
 
     applyLayout: (spec) => {
@@ -833,7 +840,11 @@ export const useEditorStore = create<EditorState>()(
       }),
 
 
-    loadSerializedState: (state, id, name) =>
+    // Switching projects/history entirely discards the old past/future, so
+    // every blob: URL still held by the outgoing items is now unreachable —
+    // safe to revoke unconditionally against the freshly loaded items.
+    loadSerializedState: (state, id, name) => {
+      const removed = get().items;
       set((s) => {
         s.canvas = state.canvas;
         s.items = state.items;
@@ -848,9 +859,12 @@ export const useEditorStore = create<EditorState>()(
         s._pending = null;
         s.currentProjectId = id;
         s.projectName = name;
-      }),
+      });
+      revokeUnusedImageUrls(removed, [get().items]);
+    },
 
-    resetProject: () =>
+    resetProject: () => {
+      const removed = get().items;
       set((s) => {
         s.canvas = { ...DEFAULT_CANVAS };
         s.items = [];
@@ -865,7 +879,9 @@ export const useEditorStore = create<EditorState>()(
         s._pending = null;
         s.currentProjectId = uid('proj');
         s.projectName = 'Untitled';
-      }),
+      });
+      revokeUnusedImageUrls(removed, [get().items]);
+    },
 
     undo: () => {
       if (get().past.length === 0) return;

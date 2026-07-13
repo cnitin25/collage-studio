@@ -29,7 +29,7 @@ export default function StylePanel() {
   };
 
   return (
-    <CollapsiblePanel title="Frame &amp; border">
+    <CollapsiblePanel title="Frame & border">
 
       <p className="subhead" style={{ marginTop: 0 }}>Shape</p>
       <div className="chip-row wrap">
@@ -106,6 +106,8 @@ export default function StylePanel() {
               key={g}
               className={`chip ${(sel.borderGlyph || '✕') === g ? 'is-active' : ''}`}
               onClick={() => updateItem(sel.id, { borderGlyph: g })}
+              title={`Use "${g}" as the border glyph`}
+              aria-label={`Border glyph ${g}`}
             >
               {g}
             </button>
@@ -115,7 +117,9 @@ export default function StylePanel() {
 
       <div className="panel-head" style={{ marginTop: 16 }}>
         <p className="subhead" style={{ margin: 0 }}>Border color</p>
-        <button className="link-btn" onClick={autoBorderColor}>Auto from photo</button>
+        <button className="link-btn" onClick={autoBorderColor} title="Set the border color from this photo's dominant color">
+          Auto from photo
+        </button>
       </div>
       <div className="swatch-row">
         {BORDER_COLORS.map((c) => (
@@ -124,6 +128,7 @@ export default function StylePanel() {
             className={`swatch ${sel.borderColor === c ? 'is-active' : ''}`}
             style={{ background: c }}
             onClick={() => updateItem(sel.id, { borderColor: c })}
+            title={`Border color ${c}`}
             aria-label={`Border ${c}`}
           />
         ))}
@@ -138,14 +143,24 @@ export default function StylePanel() {
 
       <p className="subhead">Apply style</p>
       <div className="chip-row">
-        <button className="chip" onClick={copyStyle}>Copy</button>
-        <button className="chip" disabled={!hasClipboard} onClick={pasteStyle}>Paste</button>
+        <button className="chip" onClick={copyStyle} title="Copy this photo's border, corners, shadow, frame, and adjustments">
+          Copy
+        </button>
+        <button
+          className="chip"
+          disabled={!hasClipboard}
+          onClick={pasteStyle}
+          title="Paste the copied style onto this photo"
+        >
+          Paste
+        </button>
       </div>
       <button
         className="btn full"
         style={{ marginTop: 8 }}
         disabled={photoCount < 2}
         onClick={applyStyleToAllPhotos}
+        title="Apply this photo's style to every photo in the collage"
       >
         Apply to all photos
       </button>

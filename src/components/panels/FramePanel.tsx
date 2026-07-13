@@ -46,6 +46,7 @@ export default function FramePanel() {
             className={`swatch ${canvas.frameBorderColor === c ? 'is-active' : ''}`}
             style={{ background: c }}
             onClick={() => setBackground({ frameBorderColor: c })}
+            title={`Frame border color ${c}`}
             aria-label={`Frame border ${c}`}
           />
         ))}

@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import { useContext, useState, type ReactNode } from 'react';
+import { AccordionContext } from './AccordionContext';
 
 interface Props {
   title: string;
@@ -15,12 +16,26 @@ export default function CollapsiblePanel({
   badge,
   headerExtra,
 }: Props) {
-  const [open, setOpen] = useState(defaultOpen);
+  const accordion = useContext(AccordionContext);
+  const [localOpen, setLocalOpen] = useState(defaultOpen);
+
+  // When rendered inside an InspectorPanel accordion, only the panel whose
+  // title matches the shared openId is open — expanding one auto-collapses
+  // the rest. Outside that context, each panel manages its own state.
+  const open = accordion ? accordion.openId === title : localOpen;
+
+  const toggle = () => {
+    if (accordion) {
+      accordion.setOpenId((cur) => (cur === title ? null : title));
+    } else {
+      setLocalOpen((o) => !o);
+    }
+  };
 
   return (
     <section className="panel">
       <div className="panel-head">
-        <button className="panel-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <button className="panel-toggle" onClick={toggle} aria-expanded={open}>
           <span className={`chevron ${open ? 'is-open' : ''}`}>›</span>
           <h2 className="panel-title" style={{ margin: 0 }}>
             {title} {badge}

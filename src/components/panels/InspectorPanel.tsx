@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useEditorStore } from '../../store/useEditorStore';
 import type { CanvasPreset } from '../../types';
+import { AccordionContext } from './AccordionContext';
 import LayoutPanel from './LayoutPanel';
 import ArrangePanel from './ArrangePanel';
 import AdjustPanel from './AdjustPanel';
@@ -46,6 +48,8 @@ export default function InspectorPanel() {
   const setSnapEnabled = useEditorStore((s) => s.setSnapEnabled);
   const resetView = useEditorStore((s) => s.resetView);
 
+  const [openId, setOpenId] = useState<string | null>('Canvas');
+
   const activePreset = PRESETS.find((p) => p.width === canvas.width && p.height === canvas.height);
   const activePrintPreset = PRINT_PRESETS.find(
     (p) => p.width === canvas.width && p.height === canvas.height,
@@ -53,6 +57,7 @@ export default function InspectorPanel() {
 
   return (
     <aside className="inspector">
+    <AccordionContext.Provider value={{ openId, setOpenId }}>
       <CollapsiblePanel title="Canvas">
         <div className="preset-grid">
           {PRESETS.map((p) => (
@@ -60,6 +65,7 @@ export default function InspectorPanel() {
               key={p.label}
               className={`preset ${activePreset?.label === p.label ? 'is-active' : ''}`}
               onClick={() => setCanvasSize(p.width, p.height)}
+              title={`${p.label} — ${p.width} × ${p.height} px`}
             >
               <span className="preset-shape" style={{ aspectRatio: `${p.width} / ${p.height}` }} />
               <span className="preset-label">{p.label}</span>
@@ -74,6 +80,7 @@ export default function InspectorPanel() {
               key={p.label}
               className={`preset ${activePrintPreset?.label === p.label ? 'is-active' : ''}`}
               onClick={() => setCanvasSize(p.width, p.height)}
+              title={`${p.label} — ${p.width} × ${p.height} px at 300 DPI`}
             >
               <span className="preset-shape" style={{ aspectRatio: `${p.width} / ${p.height}` }} />
               <span className="preset-label">{p.label}</span>
@@ -83,30 +90,36 @@ export default function InspectorPanel() {
 
         <p className="dim small">{canvas.width} × {canvas.height} px</p>
         <CustomSizeFields width={canvas.width} height={canvas.height} onApply={setCanvasSize} />
-        <label className="toggle-row">
+        <label className="toggle-row" title="Snap edges/centers to the canvas and other items while dragging">
           <span>Snap &amp; guides</span>
           <input type="checkbox" checked={snapEnabled} onChange={(e) => setSnapEnabled(e.target.checked)} />
         </label>
-        <button className="btn btn-ghost full" style={{ marginTop: 10 }} onClick={resetView}>
+        <button
+          className="btn btn-ghost full"
+          style={{ marginTop: 10 }}
+          onClick={resetView}
+          title="Reset the canvas view to fit the window"
+        >
           Reset zoom / pan
         </button>
       </CollapsiblePanel>
 
-      <FramePanel />
-
       <LayoutPanel />
 
       <InsertPanel />
+
+      <AlignPanel />
+      <ArrangePanel />
 
       <TextPanel />
       <CropPanel />
       <EnhancePresetsPanel />
       <AdjustPanel />
       <StylePanel />
-      <AlignPanel />
-      <ArrangePanel />
 
       <BackgroundPanel />
+
+      <FramePanel />
 
       <HistoryPanel />
 
@@ -125,6 +138,7 @@ export default function InspectorPanel() {
               key={f}
               className={`chip ${exportFormat === f ? 'is-active' : ''}`}
               onClick={() => setExportFormat(f)}
+              title={f === 'png' ? 'PNG — lossless, larger file' : 'JPEG — smaller file, slight quality loss'}
             >
               {f.toUpperCase()}
             </button>
@@ -136,6 +150,7 @@ export default function InspectorPanel() {
               key={n}
               className={`chip ${exportScale === n ? 'is-active' : ''}`}
               onClick={() => setExportScale(n)}
+              title={`Export at ${n}× the canvas resolution (${canvas.width * n} × ${canvas.height * n} px)`}
             >
               {n}×
             </button>
@@ -148,10 +163,16 @@ export default function InspectorPanel() {
       </CollapsiblePanel>
 
       <section className="panel">
-        <button className="btn btn-ghost full" onClick={clearAll} disabled={itemCount === 0}>
+        <button
+          className="btn btn-ghost full"
+          onClick={clearAll}
+          disabled={itemCount === 0}
+          title="Remove every photo, text, and sticker from the canvas"
+        >
           Clear canvas
         </button>
       </section>
+    </AccordionContext.Provider>
     </aside>
   );
 }

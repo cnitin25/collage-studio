@@ -12,7 +12,7 @@ export default function ImportWarningBanner() {
         <span className="import-warning-title">
           {failures.length === 1 ? "1 photo couldn't be added" : `${failures.length} photos couldn't be added`}
         </span>
-        <button className="import-warning-close" onClick={() => setImportFailures([])} aria-label="Dismiss">
+        <button className="import-warning-close" onClick={() => setImportFailures([])} title="Dismiss" aria-label="Dismiss">
           ✕
         </button>
       </div>

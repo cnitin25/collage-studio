@@ -17,7 +17,7 @@ export default function HistoryPanel() {
       title="History"
       badge={past.length > 0 && <span className="dim">({past.length})</span>}
       headerExtra={
-        <button className="link-btn" disabled={!canUndo} onClick={undo}>
+        <button className="link-btn" disabled={!canUndo} onClick={undo} title="Undo the last action">
           Undo
         </button>
       }
@@ -29,7 +29,7 @@ export default function HistoryPanel() {
           {[...historyLabels].reverse().map((label, revIdx) => {
             const idx = past.length - 1 - revIdx;
             return (
-              <button key={idx} className="history-item" onClick={() => jumpTo(idx)}>
+              <button key={idx} className="history-item" onClick={() => jumpTo(idx)} title={`Jump back to "${label}"`}>
                 <span className="history-dot" />
                 <span>{label}</span>
               </button>

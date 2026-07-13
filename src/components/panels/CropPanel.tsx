@@ -29,14 +29,15 @@ export default function CropPanel() {
         <button
           className={`chip ${cropping ? 'is-active' : ''}`}
           onClick={() => (cropping ? endCrop() : startCrop(sel.id))}
+          title={cropping ? 'Finish cropping this photo' : 'Start cropping this photo'}
         >
           {cropping ? 'Done' : 'Crop photo'}
         </button>
-        <button className="chip" onClick={() => resetCrop(sel.id)}>
+        <button className="chip" onClick={() => resetCrop(sel.id)} title="Reset to a centered, uncropped fit">
           Reset
         </button>
       </div>
-      <label className="toggle-row">
+      <label className="toggle-row" title="Keep crop mode active when you select another photo">
         <span>Stay in crop mode</span>
         <input
           type="checkbox"

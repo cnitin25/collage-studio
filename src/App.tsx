@@ -9,6 +9,7 @@ import ThumbnailStrip from './components/ThumbnailStrip';
 import StatusBar from './components/StatusBar';
 import ImportWarningBanner from './components/ImportWarningBanner';
 import { useEditorStore } from './store/useEditorStore';
+import { useThemeStore } from './store/useThemeStore';
 import { loadImageFiles } from './utils/loadImage';
 import { downloadDataURL } from './utils/exportStage';
 import { saveProject } from './storage/projects';
@@ -31,6 +32,10 @@ export default function App() {
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
 
+  const theme = useThemeStore((s) => s.theme);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   // Auto-save every 30 s when there's canvas content
   useEffect(() => {

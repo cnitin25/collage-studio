@@ -36,7 +36,12 @@ export default function EnhancePresetsPanel() {
     <CollapsiblePanel
       title="Enhance"
       headerExtra={
-        <button className="panel-reset-btn" disabled={isDefault} onClick={() => resetEnhancements(sel.id)}>
+        <button
+          className="panel-reset-btn"
+          disabled={isDefault}
+          onClick={() => resetEnhancements(sel.id)}
+          title="Clear all enhancements and filters on this photo"
+        >
           Reset
         </button>
       }
@@ -83,6 +88,7 @@ export default function EnhancePresetsPanel() {
               filters: { ...f, grayscale: !f.grayscale, sepia: false, presetId: undefined, presetStrength: undefined },
             })
           }
+          title="Toggle black & white"
         >
           Grayscale
         </button>
@@ -93,6 +99,7 @@ export default function EnhancePresetsPanel() {
               filters: { ...f, sepia: !f.sepia, grayscale: false, presetId: undefined, presetStrength: undefined },
             })
           }
+          title="Toggle a warm, antique tone"
         >
           Sepia
         </button>

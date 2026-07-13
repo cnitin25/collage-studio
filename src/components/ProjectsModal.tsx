@@ -93,7 +93,7 @@ export default function ProjectsModal({ open, onClose }: Props) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>Projects</h2>
-          <button className="btn btn-accent" onClick={handleNew}>
+          <button className="btn btn-accent" onClick={handleNew} title="Start a new, empty project">
             New project
           </button>
         </div>
@@ -111,7 +111,7 @@ export default function ProjectsModal({ open, onClose }: Props) {
 
         <div className="backup-row">
           <div className="backup-toggle">
-            <label className="toggle-row" style={{ margin: 0 }}>
+            <label className="toggle-row" style={{ margin: 0 }} title="Automatically save this project every 30 seconds">
               <span>Auto-save every 30s</span>
               <input
                 type="checkbox"
@@ -121,10 +121,19 @@ export default function ProjectsModal({ open, onClose }: Props) {
             </label>
           </div>
           <div className="backup-actions">
-            <button className="btn" disabled={exporting} onClick={handleExportFile}>
+            <button
+              className="btn"
+              disabled={exporting}
+              onClick={handleExportFile}
+              title="Download this project as a portable file (photos included)"
+            >
               {exporting ? 'Exporting…' : 'Export file (.json)'}
             </button>
-            <button className="btn" onClick={() => fileInputRef.current?.click()}>
+            <button
+              className="btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Reopen a project from an exported file"
+            >
               Import file
             </button>
             <input
@@ -162,11 +171,16 @@ export default function ProjectsModal({ open, onClose }: Props) {
                     {new Date(p.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <button className="project-open-btn" onClick={() => handleOpen(p.id)}>
+                <button className="project-open-btn" onClick={() => handleOpen(p.id)} title={`Open "${p.name}"`}>
                   Open
                 </button>
               </div>
-              <button className="project-del" onClick={() => handleDelete(p.id)} aria-label="Delete">
+              <button
+                className="project-del"
+                onClick={() => handleDelete(p.id)}
+                title={`Delete "${p.name}"`}
+                aria-label="Delete"
+              >
                 ✕
               </button>
             </div>

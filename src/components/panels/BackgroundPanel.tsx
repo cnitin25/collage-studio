@@ -110,6 +110,7 @@ export default function BackgroundPanel() {
               className={`swatch ${canvas.backgroundColor === c ? 'is-active' : ''}`}
               style={{ background: c }}
               onClick={() => setBackground({ backgroundType: 'color', backgroundColor: c })}
+              title={`Background color ${c}`}
               aria-label={`Background ${c}`}
             />
           ))}
@@ -154,6 +155,7 @@ export default function BackgroundPanel() {
                   className={`bg-thumb ${canvas.backgroundImageSrc === (p as { src: string }).src ? 'is-active' : ''}`}
                   onClick={() => setBackground({ backgroundType: 'image', backgroundImageSrc: (p as { src: string }).src })}
                   style={{ backgroundImage: `url(${(p as { src: string }).src})` }}
+                  title="Use this photo as the background"
                   aria-label="Use as background"
                 />
               ))}
@@ -212,7 +214,12 @@ export default function BackgroundPanel() {
 
       <div className="panel-head" style={{ marginTop: 18, marginBottom: 8 }}>
         <p className="subhead" style={{ margin: 0 }}>Auto palette</p>
-        <button className="link-btn" disabled={!paletteSource || loading} onClick={runExtract}>
+        <button
+          className="link-btn"
+          disabled={!paletteSource || loading}
+          onClick={runExtract}
+          title="Pull a color palette from the selected (or first) photo"
+        >
           {loading ? 'Reading…' : 'From photo'}
         </button>
       </div>
@@ -224,6 +231,7 @@ export default function BackgroundPanel() {
               className="swatch"
               style={{ background: c }}
               onClick={() => applyPaletteColor(c)}
+              title={`Use ${c}`}
               aria-label={`Use ${c}`}
             />
           ))}
