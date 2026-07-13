@@ -29,4 +29,16 @@ export default defineConfig({
     }),
   ],
   server: { port: 5173, open: true },
+  build: {
+    rollupOptions: {
+      output: {
+        // Konva rarely changes between releases but is a large chunk of the
+        // bundle — splitting it out means an app-code update doesn't force
+        // users to re-download it, and the two chunks fetch in parallel.
+        manualChunks: {
+          konva: ['konva', 'react-konva'],
+        },
+      },
+    },
+  },
 });

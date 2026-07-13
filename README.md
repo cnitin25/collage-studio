@@ -93,5 +93,8 @@ src/
   export to move a project to another device or browser).
 - No automated test suite — verification is manual plus TypeScript's
   compiler checks (`npm run build`).
-- The main JS bundle is large (Konva ships as one module); it doesn't
-  affect functionality but is a candidate for future code-splitting.
+- Konva is split into its own vendor chunk (`vite.config.ts`) so app-code
+  updates don't force a re-download of it, but it still loads on first
+  visit since the canvas is needed immediately — there's no further win
+  available from deferring it. HEIC decoding (`heic2any`, ~1.3MB) is
+  already lazy-loaded and only fetched the first time a HEIC file is used.
