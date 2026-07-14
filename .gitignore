@@ -7,3 +7,6 @@ dist-ssr
 !.vscode/extensions.json
 *.zip
 README.old.md
+
+# AI agent instructions - local only, not for the public repo
+AGENTS.md
