@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://collage-studio-nodejs.vercel.app/sitemap.xml
+Sitemap: https://collage.thenewai.icu/sitemap.xml
