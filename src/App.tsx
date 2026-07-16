@@ -31,6 +31,7 @@ export default function App() {
 
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   const theme = useThemeStore((s) => s.theme);
   useEffect(() => {
@@ -170,6 +171,8 @@ export default function App() {
         onExport={handleExport}
         onSave={handleSave}
         onOpenProjects={() => setProjectsOpen(true)}
+        toolsOpen={toolsOpen}
+        onToggleTools={() => setToolsOpen((v) => !v)}
       />
       <div className="workspace">
         <div className="stage-col">
@@ -192,7 +195,8 @@ export default function App() {
           </div>
           <ThumbnailStrip />
         </div>
-        <InspectorPanel />
+        {toolsOpen && <div className="drawer-scrim" onClick={() => setToolsOpen(false)} />}
+        <InspectorPanel open={toolsOpen} onClose={() => setToolsOpen(false)} />
       </div>
       <StatusBar />
       <ProjectsModal open={projectsOpen} onClose={() => setProjectsOpen(false)} />

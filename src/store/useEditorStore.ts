@@ -54,6 +54,7 @@ interface EditorState {
   past: Snapshot[];
   future: Snapshot[];
   historyLabels: string[]; // parallel to past[]
+  futureLabels: string[]; // parallel to future[]
   _pending: { snap: Snapshot; label: string } | null;
 
   canUndo: () => boolean;
@@ -234,6 +235,7 @@ export const useEditorStore = create<EditorState>()(
     past: [],
     future: [],
     historyLabels: [],
+    futureLabels: [],
     _pending: null,
 
     canUndo: () => get().past.length > 0,
@@ -248,6 +250,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const base = s.items.length;
         images.forEach((img, i) => s.items.push(placeImage(img, s.canvas, base + i)));
         s.selectedId = s.items[s.items.length - 1]?.id ?? null;
@@ -263,6 +266,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const w = Math.min(680, s.canvas.width * 0.6);
         const item: TextItem = {
           id,
@@ -294,6 +298,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const size = Math.round(Math.min(s.canvas.width, s.canvas.height) * 0.18);
         const item: StickerItem = {
           id,
@@ -321,6 +326,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const item = s.items.find((it) => it.id === id);
         if (!item) return;
         const p = patch as Record<string, unknown>;
@@ -351,6 +357,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         s.items = s.items.filter((it) => it.id !== selectedId);
         s.selectedId = null;
         s.croppingId = null;
@@ -374,6 +381,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         s.items.push(copy);
         s.selectedId = copy.id;
         s.croppingId = null;
@@ -393,6 +401,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const a = s.items[idxA];
         const b = s.items[idxB];
         const ga = { x: a.x, y: a.y, width: a.width, height: a.height, rotation: a.rotation };
@@ -418,6 +427,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         Object.assign(s.canvas, patch);
       });
     },
@@ -454,6 +464,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const it = s.items.find((i) => i.id === selectedId);
         if (it && it.type === 'image') Object.assign(it, structuredClone(styleClipboard));
       });
@@ -478,6 +489,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         s.items.forEach((it) => {
           if (it.type === 'image' && it.id !== selId) Object.assign(it, structuredClone(style));
         });
@@ -494,6 +506,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         s.canvas.width = width;
         s.canvas.height = height;
         if (s.lastLayout) layoutToDraft(s, s.lastLayout);
@@ -510,6 +523,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         s.items = [];
         s.selectedId = null;
         s.croppingId = null;
@@ -529,6 +543,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         layoutToDraft(s, spec);
       });
     },
@@ -545,6 +560,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const it = s.items.find((i) => i.id === selId);
         if (!it || it.type !== 'image') return;
         it.borderWidth = preset.style.borderWidth;
@@ -570,6 +586,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const it = s.items.find((i) => i.id === selId);
         if (!it || it.type !== 'image') return;
         it.filters = alreadyActive
@@ -605,6 +622,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const it = s.items.find((i) => i.id === id);
         if (it && it.type === 'image') it.filters = { ...NEUTRAL_FILTERS };
       });
@@ -621,6 +639,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const [m] = s.items.splice(idx, 1);
         s.items.push(m);
       });
@@ -637,6 +656,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const [m] = s.items.splice(idx, 1);
         s.items.unshift(m);
       });
@@ -653,6 +673,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const [m] = s.items.splice(idx, 1);
         s.items.splice(idx + 1, 0, m);
       });
@@ -669,6 +690,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const [m] = s.items.splice(idx, 1);
         s.items.splice(idx - 1, 0, m);
       });
@@ -699,6 +721,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(pending.snap);
         s.historyLabels.push(pending.label);
         s.future = [];
+        s.futureLabels = [];
         s._pending = null;
       });
     },
@@ -742,6 +765,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const item = s.items.find((i) => i.id === id);
         if (item && item.type === 'image') {
           item.crop = coverCrop(item.naturalWidth, item.naturalHeight, item.width, item.height);
@@ -855,6 +879,7 @@ export const useEditorStore = create<EditorState>()(
         s.editingId = null;
         s.past = [];
         s.future = [];
+        s.futureLabels = [];
         s.historyLabels = [];
         s._pending = null;
         s.currentProjectId = id;
@@ -875,6 +900,7 @@ export const useEditorStore = create<EditorState>()(
         s.editingId = null;
         s.past = [];
         s.future = [];
+        s.futureLabels = [];
         s.historyLabels = [];
         s._pending = null;
         s.currentProjectId = uid('proj');
@@ -888,9 +914,10 @@ export const useEditorStore = create<EditorState>()(
       const current = snapshot(get());
       set((s) => {
         const prev = s.past.pop();
-        s.historyLabels.pop();
+        const label = s.historyLabels.pop();
         if (!prev) return;
         s.future.push(current);
+        s.futureLabels.push(label ?? 'Redo');
         s.items = prev.items;
         s.canvas = prev.canvas;
         s.spacing = prev.spacing;
@@ -907,9 +934,10 @@ export const useEditorStore = create<EditorState>()(
       const current = snapshot(get());
       set((s) => {
         const next = s.future.pop();
+        const label = s.futureLabels.pop();
         if (!next) return;
         s.past.push(current);
-        s.historyLabels.push('Redo');
+        s.historyLabels.push(label ?? 'Redo');
         s.items = next.items;
         s.canvas = next.canvas;
         s.spacing = next.spacing;
@@ -931,6 +959,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const it = s.items.find((i) => i.id === id);
         if (!it || it.type !== 'image') return;
         if (axis === 'x') it.flipX = !it.flipX;
@@ -948,6 +977,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const it = s.items.find((i) => i.id === id);
         if (!it) return;
         it.rotation = ((it.rotation + deltaDeg) % 360 + 360) % 360;
@@ -967,6 +997,7 @@ export const useEditorStore = create<EditorState>()(
         s.past.push(prev);
         s.historyLabels.push(label);
         s.future = [];
+        s.futureLabels = [];
         const it = s.items.find((i) => i.id === selId);
         if (!it) return;
         const iw = it.type === 'sticker' ? it.fontSize : it.width;

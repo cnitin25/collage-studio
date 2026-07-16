@@ -10,3 +10,11 @@ README.old.md
 
 # AI agent instructions - local only, not for the public repo
 AGENTS.md
+
+# Playwright
+/e2e/test-results/
+/e2e/playwright-report/
+/e2e/playwright/.cache/
+
+# TypeScript incremental build cache — local/derived, changes on every build
+*.tsbuildinfo

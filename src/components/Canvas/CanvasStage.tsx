@@ -76,6 +76,19 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
   const isPanning = useRef(false);
   const spaceDown = useRef(false);
 
+  // Touch devices get fatter Transformer handles; desktop mouse precision
+  // (10px) is untouched. Tracks live so a hybrid device updates if input
+  // type changes mid-session.
+  const [coarsePointer, setCoarsePointer] = useState(
+    () => window.matchMedia?.('(pointer: coarse)').matches ?? false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: coarse)');
+    const onChange = () => setCoarsePointer(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
   useLayoutEffect(() => {
     const compute = () => {
       const el = wrapRef.current;
@@ -166,7 +179,42 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
   // Space+drag pan handling on the Stage
   const panStart = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
 
+  // Two-finger touch = pinch-zoom + pan the canvas view, entirely separate
+  // from one-finger touch (which keeps dragging items / box-selecting).
+  // Writes through the same setView the wheel-zoom and Space+drag paths use,
+  // so resetView() and export neutralization keep working unmodified.
+  const gesture = useRef<{
+    startDist: number;
+    startScale: number;
+    startCx: number;
+    startCy: number;
+    startViewX: number;
+    startViewY: number;
+  } | null>(null);
+
+  const touchPoint = (t: Touch) => {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    return { x: t.clientX - (rect?.left ?? 0), y: t.clientY - (rect?.top ?? 0) };
+  };
+
   const handleStageMouseDown = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    const te = e.evt as TouchEvent;
+    if ('touches' in te && te.touches.length === 2) {
+      // A second finger landing mid-drag would otherwise leave the item
+      // jumping once the gesture ends — cancel any in-progress drag first.
+      stageRef.current?.stopDrag();
+      const p0 = touchPoint(te.touches[0]);
+      const p1 = touchPoint(te.touches[1]);
+      gesture.current = {
+        startDist: Math.hypot(p1.x - p0.x, p1.y - p0.y),
+        startScale: viewScale,
+        startCx: (p0.x + p1.x) / 2,
+        startCy: (p0.y + p1.y) / 2,
+        startViewX: viewX,
+        startViewY: viewY,
+      };
+      return;
+    }
     if (spaceDown.current) {
       isPanning.current = true;
       if (wrapRef.current) wrapRef.current.style.cursor = 'grabbing';
@@ -181,7 +229,25 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     if (clickedEmpty) select(null);
   };
 
-  const handleStageMM = () => {
+  const handleStageMM = (e?: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    const te = e?.evt as TouchEvent | undefined;
+    if (gesture.current && te && 'touches' in te && te.touches.length === 2) {
+      te.preventDefault();
+      const g = gesture.current;
+      const p0 = touchPoint(te.touches[0]);
+      const p1 = touchPoint(te.touches[1]);
+      const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+      const cx = (p0.x + p1.x) / 2;
+      const cy = (p0.y + p1.y) / 2;
+      const ratio = g.startDist > 0 ? dist / g.startDist : 1;
+      const newScale = Math.max(0.1, Math.min(8, g.startScale * ratio));
+      const contentX = (g.startCx / display.scale - g.startViewX) / g.startScale;
+      const contentY = (g.startCy / display.scale - g.startViewY) / g.startScale;
+      const panDX = (cx - g.startCx) / display.scale;
+      const panDY = (cy - g.startCy) / display.scale;
+      setView(newScale, contentX - contentX * newScale + panDX, contentY - contentY * newScale + panDY);
+      return;
+    }
     if (!isPanning.current || !panStart.current) return;
     const stage = stageRef.current;
     const p = stage?.getPointerPosition();
@@ -191,7 +257,12 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     setView(viewScale, panStart.current.ox + dx, panStart.current.oy + dy);
   };
 
-  const handleStageMU = () => {
+  const handleStageMU = (e?: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    const te = e?.evt as TouchEvent | undefined;
+    if (gesture.current) {
+      if (!te || !('touches' in te) || te.touches.length < 2) gesture.current = null;
+      return;
+    }
     if (isPanning.current) {
       isPanning.current = false;
       panStart.current = null;
@@ -407,7 +478,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
             enabledAnchors={lockRatio ? CORNER_ANCHORS : ALL_ANCHORS}
             anchorStroke="#ff7a59"
             anchorFill="#ffffff"
-            anchorSize={10}
+            anchorSize={coarsePointer ? 22 : 10}
             borderStroke="#ff7a59"
             borderDash={[4, 4]}
             boundBoxFunc={(oldBox, newBox) =>

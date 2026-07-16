@@ -33,7 +33,12 @@ const PRINT_PRESETS: CanvasPreset[] = [
   { label: 'A4', width: 2480, height: 3508 },
 ];
 
-export default function InspectorPanel() {
+interface Props {
+  open?: boolean;
+  onClose?: () => void;
+}
+
+export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
   const canvas = useEditorStore((s) => s.canvas);
   const setCanvasSize = useEditorStore((s) => s.setCanvasSize);
   const clearAll = useEditorStore((s) => s.clearAll);
@@ -56,7 +61,13 @@ export default function InspectorPanel() {
   );
 
   return (
-    <aside className="inspector">
+    <aside className={`inspector ${drawerOpen ? 'is-open' : ''}`}>
+    <div className="inspector-drawer-head">
+      <span>Tools</span>
+      <button className="btn btn-ghost inspector-close" onClick={onClose} aria-label="Close tools" title="Close tools">
+        ✕
+      </button>
+    </div>
     <AccordionContext.Provider value={{ openId, setOpenId }}>
       <CollapsiblePanel title="Canvas">
         <div className="preset-grid">

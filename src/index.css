@@ -119,6 +119,52 @@ button {
   gap: 8px;
 }
 
+/* Icon glyphs only render in compact mode (see responsive block below) —
+   on desktop the buttons stay text-only, unchanged from before. */
+.btn-icon { display: none; }
+
+/* Desktop: an invisible wrapper so its buttons behave as direct flex items
+   of .toolbar-actions (identical layout to before this was introduced).
+   Compact mode hides the whole group at once — see responsive block. */
+.toolbar-secondary { display: contents; }
+
+.toolbar-tools-divider,
+.toolbar-tools-toggle,
+.toolbar-overflow {
+  display: none;
+}
+
+.toolbar-overflow { position: relative; }
+.overflow-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 30px -10px var(--shadow-color);
+  padding: 6px;
+  gap: 2px;
+}
+.overflow-item {
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
+.overflow-item:hover:not(:disabled) { background: var(--panel-hi); }
+.overflow-item:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .divider {
   width: 1px;
   height: 22px;
@@ -187,6 +233,9 @@ button {
   background-color: var(--bg);
   background-image: radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
   background-size: 22px 22px;
+  /* Let the app's own pinch-zoom/two-finger-pan handle touch instead of the
+     browser's native pinch-to-zoom/scroll. */
+  touch-action: none;
 }
 
 .stage-surface {
@@ -205,6 +254,22 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Drawer header (Tools label + close button) only shows once .inspector
+   becomes an overlay drawer in compact mode — see responsive block below. */
+.inspector-drawer-head {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+}
+.inspector-close { padding: 0 10px; }
+
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(10, 11, 15, 0.5);
 }
 
 .panel {
@@ -852,8 +917,9 @@ button {
   transition: background 0.1s;
 }
 .history-item:hover { background: var(--panel-hi); }
-.history-origin { cursor: default; }
-.history-origin:hover { background: none; }
+.history-origin, .history-current { cursor: default; }
+.history-origin:hover, .history-current:hover { background: none; }
+.history-future { opacity: 0.6; }
 .history-dot {
   width: 8px;
   height: 8px;
@@ -865,6 +931,11 @@ button {
 .history-dot.is-origin {
   background: var(--accent);
   border-color: var(--accent);
+}
+.history-dot.is-current {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 /* ---------- Projects: open affordance, storage location note ---------- */
@@ -1160,4 +1231,73 @@ button {
   color: var(--muted-dim);
   border-color: var(--line);
   background: transparent;
+}
+
+/* ==========================================================================
+   Responsive / mobile — everything below only applies at narrow widths.
+   Desktop layout above this block is intentionally untouched.
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  /* ---- Toolbar: icon-only primary actions + overflow menu ---- */
+  .toolbar { padding: 0 10px; }
+  .toolbar-actions { gap: 4px; }
+  .toolbar-actions .btn-icon { display: inline-flex; }
+  .toolbar-actions .btn-label { display: none; }
+  .toolbar-actions .btn { padding: 0 10px; }
+
+  .toolbar-secondary { display: none; }
+  .toolbar-tools-divider,
+  .toolbar-tools-toggle,
+  .toolbar-overflow {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .brand { flex: 0 1 auto; min-width: 0; }
+  .project-name-input {
+    width: auto;
+    max-width: 34vw;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ---- Workspace: canvas full-width, inspector becomes a slide-in drawer ---- */
+  .stage-col { min-width: 0; width: 100%; }
+
+  .inspector {
+    position: fixed;
+    top: 56px;
+    right: 0;
+    bottom: 0;
+    width: min(340px, 88vw);
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+    z-index: 31;
+    box-shadow: -12px 0 40px -12px var(--shadow-color);
+  }
+  .inspector.is-open { transform: translateX(0); }
+  .inspector-drawer-head { display: flex; margin-bottom: 8px; }
+
+  /* ---- Cosmetic: status bar, custom-size fields ---- */
+  .status-bar { gap: 6px; overflow: hidden; }
+  .status-bar > * {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .custom-size-fields { flex-wrap: wrap; }
+}
+
+@media (max-width: 400px) {
+  .project-name-input { display: none; }
+  .status-secondary { display: none; }
+  .project-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}
+
+@media (max-width: 768px) and (prefers-reduced-motion: reduce) {
+  .inspector { transition: none; }
 }
