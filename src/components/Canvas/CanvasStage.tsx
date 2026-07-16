@@ -284,7 +284,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     const tr = trRef.current;
     const stage = stageRef.current;
     if (!tr || !stage) return;
-    if (!selectedId || croppingId || editingId || layoutLocked) {
+    if (!selectedId || editingId || layoutLocked) {
       tr.nodes([]);
       tr.getLayer()?.batchDraw();
       return;
@@ -292,7 +292,9 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     const node = stage.findOne<Konva.Node>(`#${selectedId}`);
     tr.nodes(node ? [node] : []);
     tr.getLayer()?.batchDraw();
-  }, [selectedId, croppingId, editingId, layoutLocked, items]);
+  }, [selectedId, editingId, layoutLocked, items]);
+
+  const isCroppingSelected = !!croppingId && croppingId === selectedId;
 
   const handleNodeDragMove = (id: string, node: Konva.Node) => {
     const item = items.find((i) => i.id === id);
@@ -473,13 +475,14 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
 
           <Transformer
             ref={trRef}
-            rotateEnabled
+            rotateEnabled={!isCroppingSelected}
             keepRatio={lockRatio}
-            enabledAnchors={lockRatio ? CORNER_ANCHORS : ALL_ANCHORS}
+            enabledAnchors={isCroppingSelected ? [] : lockRatio ? CORNER_ANCHORS : ALL_ANCHORS}
             anchorStroke="#ff7a59"
             anchorFill="#ffffff"
             anchorSize={coarsePointer ? 22 : 10}
             borderStroke="#ff7a59"
+            borderStrokeWidth={isCroppingSelected ? 3 : 1}
             borderDash={[4, 4]}
             boundBoxFunc={(oldBox, newBox) =>
               newBox.width < 24 || newBox.height < 24 ? oldBox : newBox
