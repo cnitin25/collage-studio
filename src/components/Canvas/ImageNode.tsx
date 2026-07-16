@@ -6,6 +6,7 @@ import type { KonvaEventObject } from 'konva/lib/Node';
 import type { ImageItem } from '../../types';
 import { coverCrop } from '../../utils/cover';
 import { drawShapePath } from '../../utils/shapes';
+import { registerImageNode } from '../../utils/imageNodeRegistry';
 
 interface Props {
   item: ImageItem;
@@ -117,6 +118,13 @@ export default function ImageNode({
     if (f.blur) list.push(Konva.Filters.Blur);
     return list;
   }, [f.brightness, f.contrast, f.saturation, f.hue, f.enhance, f.grayscale, f.sepia, f.blur]);
+
+  // Expose the rendered node so sidebar panels (e.g. the histogram) can read
+  // its current filtered/cropped pixels, not just the original source file.
+  useEffect(() => {
+    registerImageNode(item.id, imgRef.current);
+    return () => registerImageNode(item.id, null);
+  }, [item.id]);
 
   // (Re)cache the image so Konva filters have a base to work on. Clear when none.
   useEffect(() => {

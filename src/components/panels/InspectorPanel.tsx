@@ -4,7 +4,6 @@ import type { CanvasPreset } from '../../types';
 import { AccordionContext } from './AccordionContext';
 import LayoutPanel from './LayoutPanel';
 import ArrangePanel from './ArrangePanel';
-import AdjustPanel from './AdjustPanel';
 import EnhancePresetsPanel from './EnhancePresetsPanel';
 import CropPanel from './CropPanel';
 import StylePanel from './StylePanel';
@@ -125,7 +124,6 @@ export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
       <TextPanel />
       <CropPanel />
       <EnhancePresetsPanel />
-      <AdjustPanel />
       <StylePanel />
 
       <BackgroundPanel />

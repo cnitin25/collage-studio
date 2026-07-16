@@ -5,7 +5,7 @@ export interface Rect {
   height: number;
 }
 
-export type LayoutType = 'grid' | 'justified' | 'mosaic';
+export type LayoutType = 'grid' | 'justified' | 'mosaic' | 'masonry' | 'spotlight';
 
 export interface SpacingOptions {
   /** gap between the collage content and the canvas edge (px) */
@@ -23,6 +23,8 @@ export interface LayoutOptions extends SpacingOptions {
 
 export interface LayoutSpec {
   type: LayoutType;
-  /** columns, for the grid strategy */
+  /** columns, for the grid/masonry strategies */
   cols?: number;
+  /** index of the featured item, for the spotlight strategy (default 0) */
+  heroIndex?: number;
 }

@@ -55,7 +55,7 @@ export function quantize(data: Uint8ClampedArray, count = 6, minDistance = 48): 
   return chosen.map((c) => toHex(c.r, c.g, c.b));
 }
 
-function loadHTMLImage(src: string): Promise<HTMLImageElement> {
+export function loadHTMLImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';

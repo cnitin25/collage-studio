@@ -2,6 +2,7 @@ import { useEditorStore } from '../../store/useEditorStore';
 import { ENHANCE_PRESETS } from '../../style/enhancePresets';
 import CollapsiblePanel from './CollapsiblePanel';
 import Slider from '../ui/Slider';
+import Histogram from './Histogram';
 
 export default function EnhancePresetsPanel() {
   const selectedId = useEditorStore((s) => s.selectedId);
@@ -10,11 +11,15 @@ export default function EnhancePresetsPanel() {
   const setEnhanceStrengthLive = useEditorStore((s) => s.setEnhanceStrengthLive);
   const resetEnhancements = useEditorStore((s) => s.resetEnhancements);
   const updateItem = useEditorStore((s) => s.updateItem);
+  const updateItemLive = useEditorStore((s) => s.updateItemLive);
   const beginChange = useEditorStore((s) => s.beginChange);
   const commitChange = useEditorStore((s) => s.commitChange);
 
   const sel = items.find((i) => i.id === selectedId);
   if (!sel || sel.type !== 'image') return null;
+
+  const setLive = (patch: Partial<NonNullable<typeof sel.filters>>) =>
+    updateItemLive(sel.id, { filters: { ...sel.filters, ...patch } });
 
   const f = sel.filters ?? {};
   const activePreset = f.presetId;
@@ -34,7 +39,7 @@ export default function EnhancePresetsPanel() {
 
   return (
     <CollapsiblePanel
-      title="Enhance"
+      title="Enhance & Adjust"
       headerExtra={
         <button
           className="panel-reset-btn"
@@ -46,6 +51,10 @@ export default function EnhancePresetsPanel() {
         </button>
       }
     >
+      <p className="subhead" style={{ marginTop: 0 }}>Histogram</p>
+      <Histogram item={sel} />
+
+      <p className="subhead">Presets</p>
       <div className="chip-row wrap">
         {ENHANCE_PRESETS.map((p) => (
           <button
@@ -82,7 +91,7 @@ export default function EnhancePresetsPanel() {
       <p className="subhead">Color style</p>
       <div className="chip-row">
         <button
-          className={`chip ${f.grayscale ? 'is-active' : ''}`}
+          className={`chip ${!activePreset && f.grayscale ? 'is-active' : ''}`}
           onClick={() =>
             updateItem(sel.id, {
               filters: { ...f, grayscale: !f.grayscale, sepia: false, presetId: undefined, presetStrength: undefined },
@@ -93,7 +102,7 @@ export default function EnhancePresetsPanel() {
           Grayscale
         </button>
         <button
-          className={`chip ${f.sepia ? 'is-active' : ''}`}
+          className={`chip ${!activePreset && f.sepia ? 'is-active' : ''}`}
           onClick={() =>
             updateItem(sel.id, {
               filters: { ...f, sepia: !f.sepia, grayscale: false, presetId: undefined, presetStrength: undefined },
@@ -106,8 +115,57 @@ export default function EnhancePresetsPanel() {
       </div>
       <p className="dim small">
         Presets set a starting look at 60% strength — fine-tune with Strength
-        above, or Adjust below. Grayscale/Sepia toggle independently.
+        above, or the sliders below. Grayscale/Sepia toggle independently.
       </p>
+
+      <p className="subhead">Adjust</p>
+      <div className="sliders">
+        <Slider
+          label="Brightness"
+          value={f.brightness ?? 0}
+          min={-100}
+          max={100}
+          onStart={() => beginChange('Brightness')}
+          onChange={(v) => setLive({ brightness: v })}
+          onEnd={commitChange}
+        />
+        <Slider
+          label="Contrast"
+          value={f.contrast ?? 0}
+          min={-100}
+          max={100}
+          onStart={() => beginChange('Contrast')}
+          onChange={(v) => setLive({ contrast: v })}
+          onEnd={commitChange}
+        />
+        <Slider
+          label="Saturation"
+          value={f.saturation ?? 0}
+          min={-100}
+          max={100}
+          onStart={() => beginChange('Saturation')}
+          onChange={(v) => setLive({ saturation: v })}
+          onEnd={commitChange}
+        />
+        <Slider
+          label="Warmth (hue)"
+          value={f.hue ?? 0}
+          min={-180}
+          max={180}
+          onStart={() => beginChange('Hue')}
+          onChange={(v) => setLive({ hue: v })}
+          onEnd={commitChange}
+        />
+        <Slider
+          label="Blur"
+          value={f.blur ?? 0}
+          min={0}
+          max={40}
+          onStart={() => beginChange('Blur')}
+          onChange={(v) => setLive({ blur: v })}
+          onEnd={commitChange}
+        />
+      </div>
     </CollapsiblePanel>
   );
 }

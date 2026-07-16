@@ -28,6 +28,8 @@ export function suggestLayouts(
   }
   candidates.push({ spec: { type: 'justified' }, label: 'Justified' });
   candidates.push({ spec: { type: 'mosaic' }, label: 'Mosaic' });
+  candidates.push({ spec: { type: 'masonry' }, label: 'Masonry' });
+  if (n >= 3) candidates.push({ spec: { type: 'spotlight', heroIndex: 0 }, label: 'Spotlight' });
 
   const scored: Suggestion[] = candidates.map(({ spec, label }) => {
     const rects = computeLayout(aspects, spec, opts);

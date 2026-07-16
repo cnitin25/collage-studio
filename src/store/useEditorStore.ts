@@ -20,6 +20,7 @@ import { ENHANCE_PRESETS, DEFAULT_PRESET_STRENGTH, NEUTRAL_FILTERS, scaleEnhance
 import type { SerializedState } from '../storage/projects';
 import { uid } from '../utils/id';
 import { revokeUnusedImageUrls } from '../utils/blobUrls';
+import { shuffle } from '../utils/random';
 
 interface Snapshot {
   items: CollageItem[];
@@ -75,6 +76,7 @@ interface EditorState {
   setCanvasSize: (width: number, height: number) => void;
   clearAll: () => void;
   applyLayout: (spec: LayoutSpec) => void;
+  shufflePhotos: () => void;
   applyFrame: (frame: FrameId) => void;
   applyEnhancePreset: (preset: EnhancePresetId) => void;
   setEnhanceStrengthLive: (id: string, strengthPct: number) => void;
@@ -545,6 +547,34 @@ export const useEditorStore = create<EditorState>()(
         s.future = [];
         s.futureLabels = [];
         layoutToDraft(s, spec);
+      });
+    },
+
+    shufflePhotos: () => {
+      const imageIndices: number[] = [];
+      get().items.forEach((it, idx) => {
+        if (it.type === 'image') imageIndices.push(idx);
+      });
+      if (imageIndices.length < 2) return;
+
+      const prev = snapshot(get());
+      set((s) => {
+        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
+        s.past.push(prev);
+        s.historyLabels.push('Shuffle photos');
+        s.future = [];
+        s.futureLabels = [];
+
+        // Permute only the image items' array positions; text/sticker items
+        // keep their slot.
+        const shuffled = shuffle(imageIndices.map((idx) => s.items[idx]));
+        imageIndices.forEach((idx, k) => {
+          s.items[idx] = shuffled[k];
+        });
+
+        // Reflow immediately if a layout is active, so the shuffle is visible
+        // on canvas right away instead of requiring a manual layout re-click.
+        if (s.lastLayout) layoutToDraft(s, s.lastLayout);
       });
     },
 

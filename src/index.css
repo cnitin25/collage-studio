@@ -458,6 +458,24 @@ button {
   color: var(--muted);
 }
 
+.histogram-wrap {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.histogram {
+  display: block;
+  border-radius: 8px;
+}
+.histogram-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+
 .sliders {
   display: flex;
   flex-direction: column;

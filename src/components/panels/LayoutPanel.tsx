@@ -10,6 +10,8 @@ const STRATEGIES: { type: LayoutType; label: string }[] = [
   { type: 'grid', label: 'Grid' },
   { type: 'justified', label: 'Justified' },
   { type: 'mosaic', label: 'Mosaic' },
+  { type: 'masonry', label: 'Masonry' },
+  { type: 'spotlight', label: 'Spotlight' },
 ];
 
 function Thumb({ rects, cw, ch }: { rects: Rect[]; cw: number; ch: number }) {
@@ -43,6 +45,7 @@ export default function LayoutPanel() {
   const spacing = useEditorStore((s) => s.spacing);
   const lastLayout = useEditorStore((s) => s.lastLayout);
   const applyLayout = useEditorStore((s) => s.applyLayout);
+  const shufflePhotos = useEditorStore((s) => s.shufflePhotos);
   const setSpacingLive = useEditorStore((s) => s.setSpacingLive);
   const beginChange = useEditorStore((s) => s.beginChange);
   const commitChange = useEditorStore((s) => s.commitChange);
@@ -70,7 +73,7 @@ export default function LayoutPanel() {
 
   return (
     <CollapsiblePanel title="Layout">
-      <div className="chip-row">
+      <div className="chip-row wrap">
         {STRATEGIES.map((s) => (
           <button
             key={s.type}
@@ -81,6 +84,17 @@ export default function LayoutPanel() {
             {s.label}
           </button>
         ))}
+      </div>
+
+      <div className="chip-row" style={{ marginTop: 14 }}>
+        <button
+          className="chip"
+          disabled={imageItems.length < 2}
+          title="Shuffle photo order and reflow the canvas"
+          onClick={() => shufflePhotos()}
+        >
+          Shuffle photos
+        </button>
       </div>
 
       {suggestions.length > 0 && (
