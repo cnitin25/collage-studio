@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import { useEditorStore } from '../../store/useEditorStore';
-import type { BackgroundType, PatternKind } from '../../types';
+import type { BackgroundType, CollageItem, PatternKind } from '../../types';
 import { extractPalette } from '../../utils/palette';
 import { loadImageFile } from '../../utils/loadImage';
+import { uid } from '../../utils/id';
 import Slider from '../ui/Slider';
 import CollapsiblePanel from './CollapsiblePanel';
 
@@ -46,7 +47,9 @@ export default function BackgroundPanel() {
   const [palette, setPalette] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const photos = items.filter((i) => i.type === 'image');
+  const photos = items.filter(
+    (i): i is Extract<CollageItem, { type: 'image' }> => i.type === 'image',
+  );
   const type = canvas.backgroundType;
 
   const paletteSource = (() => {
@@ -79,7 +82,11 @@ export default function BackgroundPanel() {
     if (!file) return;
     try {
       const loaded = await loadImageFile(file);
-      setBackground({ backgroundType: 'image', backgroundImageSrc: loaded.src });
+      setBackground({
+        backgroundType: 'image',
+        backgroundImageSrc: loaded.src,
+        backgroundAssetId: uid('asset'),
+      });
     } catch (err) {
       setImportFailures([
         { name: file.name, reason: err instanceof Error ? err.message : 'Could not load this image.' },
@@ -152,9 +159,15 @@ export default function BackgroundPanel() {
               {photos.map((p) => (
                 <button
                   key={p.id}
-                  className={`bg-thumb ${canvas.backgroundImageSrc === (p as { src: string }).src ? 'is-active' : ''}`}
-                  onClick={() => setBackground({ backgroundType: 'image', backgroundImageSrc: (p as { src: string }).src })}
-                  style={{ backgroundImage: `url(${(p as { src: string }).src})` }}
+                  className={`bg-thumb ${canvas.backgroundImageSrc === p.src ? 'is-active' : ''}`}
+                  onClick={() =>
+                    setBackground({
+                      backgroundType: 'image',
+                      backgroundImageSrc: p.src,
+                      backgroundAssetId: p.assetId,
+                    })
+                  }
+                  style={{ backgroundImage: `url(${p.src})` }}
                   title="Use this photo as the background"
                   aria-label="Use as background"
                 />

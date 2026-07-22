@@ -121,6 +121,10 @@ export interface CanvasConfig {
 
   // image / blurred (blurred = image with backgroundBlur > 0)
   backgroundImageSrc?: string;
+  // Identifies the blob backing backgroundImageSrc so saveProject/openProject
+  // can persist and rebuild it — backgroundImageSrc alone is a volatile blob:
+  // URL that dies on reload, same reason ImageItem carries assetId.
+  backgroundAssetId?: string;
   backgroundBlur?: number; // px
 
   // pattern

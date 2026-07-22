@@ -34,6 +34,11 @@ never leave your device.
 - **Export** — PNG or JPEG, at 1×/2×/3× the canvas resolution.
 - **Offline install (PWA)** — the built app installs and runs with no
   network connection.
+- **Responsive layout** — on narrow/touch viewports the inspector becomes a
+  slide-over drawer and secondary toolbar actions collapse into an overflow
+  menu; desktop keeps the fixed side panel.
+- **Histogram** — live R/G/B value distribution for the selected photo,
+  reflecting current crop/filter edits.
 - **Undo/redo, keyboard shortcuts, dark/light theme.**
 
 ## Who it's for
@@ -51,6 +56,11 @@ npm run dev      # dev server, printed URL (default http://localhost:5173)
 ```bash
 npm run build     # production build -> dist/
 npm run preview   # serve the build locally (offline/PWA install only works here, not in dev)
+```
+
+```bash
+cd e2e && npm install   # first time only
+npm run test:e2e        # Playwright e2e suite (spins up the dev server itself)
 ```
 
 To use it from another device on the same network (e.g. a phone), run
@@ -79,11 +89,18 @@ src/
   storage/                 IndexedDB projects + assets, portable file import/export
   utils/                   image loading, HEIC conversion, cropping, palette, blob URLs
   components/
-    Toolbar.tsx             top bar — undo/redo, save/export, theme toggle
+    Toolbar.tsx             top bar — undo/redo, save/export, theme toggle;
+                             collapses secondary actions into an overflow
+                             menu on narrow viewports
     App.tsx                 dropzone, keyboard shortcuts, export/save wiring
     ErrorBoundary.tsx        catches render crashes, offers a safe reload
     Canvas/                  Konva stage and per-item node renderers
-    panels/                  right-hand inspector — one collapsible panel per feature area
+    panels/                  right-hand inspector — one collapsible panel per
+                             feature area (becomes a slide-over drawer on
+                             narrow/touch viewports)
+e2e/                        standalone Playwright project (its own
+                             package.json); `npm run test:e2e` at the repo
+                             root drives it
 ```
 
 ## Known limitations
@@ -91,8 +108,9 @@ src/
 - Single-user, single-browser: projects saved via IndexedDB stay on that
   device/browser and aren't synced elsewhere (use the portable `.json`
   export to move a project to another device or browser).
-- No automated test suite — verification is manual plus TypeScript's
-  compiler checks (`npm run build`).
+- A small Playwright suite (`e2e/`) covers the mobile responsive layout
+  (drawer, overflow menu, pinch-zoom); most other verification is manual
+  plus TypeScript's compiler checks (`npm run build`).
 - Konva is split into its own vendor chunk (`vite.config.ts`) so app-code
   updates don't force a re-download of it, but it still loads on first
   visit since the canvas is needed immediately — there's no further win

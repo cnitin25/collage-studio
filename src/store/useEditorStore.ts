@@ -130,6 +130,7 @@ const DEFAULT_CANVAS: CanvasConfig = {
   gradientTo: '#ff7a59',
   gradientAngle: 45,
   backgroundImageSrc: undefined,
+  backgroundAssetId: undefined,
   backgroundBlur: 24,
   patternKind: 'dots',
   patternColor: '#d8d2c6',

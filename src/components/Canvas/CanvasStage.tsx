@@ -16,7 +16,7 @@ import StickerNode from './StickerNode';
 import Background from './Background';
 import { drawShapePath } from '../../utils/shapes';
 import type { CollageItem } from '../../types';
-import { computeSnap, type Box, type Guide } from '../../utils/snap';
+import { computeSnap, collectSnapTargets, nearestSnapTarget, type Box, type Guide } from '../../utils/snap';
 
 export interface CanvasHandle {
   getStage: () => Konva.Stage | null;
@@ -484,9 +484,84 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
             borderStroke="#ff7a59"
             borderStrokeWidth={isCroppingSelected ? 3 : 1}
             borderDash={[4, 4]}
-            boundBoxFunc={(oldBox, newBox) =>
-              newBox.width < 24 || newBox.height < 24 ? oldBox : newBox
-            }
+            boundBoxFunc={(oldBox, newBox) => {
+              if (newBox.width < 24 || newBox.height < 24) return oldBox;
+
+              // Resize snapping only for axis-aligned, non-ratio-locked boxes —
+              // once rotated or ratio-locked, "left edge"/"right edge" stop being
+              // independent and single-axis snapping would distort the shape.
+              const rot = ((newBox.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+              const axisAligned = rot < 0.001 || rot > Math.PI * 2 - 0.001;
+              const stage = stageRef.current;
+              if (!snapEnabled || lockRatio || !axisAligned || !stage || !selected) {
+                setGuides([]);
+                return newBox;
+              }
+
+              const sx = stage.scaleX() || 1;
+              const sy = stage.scaleY() || 1;
+              const ox = stage.x();
+              const oy = stage.y();
+              const toLocalX = (abs: number) => (abs - ox) / sx;
+              const toLocalY = (abs: number) => (abs - oy) / sy;
+              const thresholdX = 6 / sx;
+              const thresholdY = 6 / sy;
+
+              const others = items.filter((i) => i.id !== selected.id).map(itemBox);
+              const xTargets = collectSnapTargets(canvas.width, others, 'x');
+              const yTargets = collectSnapTargets(canvas.height, others, 'y');
+
+              const eps = 0.01;
+              const leftMoving = Math.abs(newBox.x - oldBox.x) > eps;
+              const rightMoving = Math.abs(newBox.x + newBox.width - (oldBox.x + oldBox.width)) > eps;
+              const topMoving = Math.abs(newBox.y - oldBox.y) > eps;
+              const bottomMoving = Math.abs(newBox.y + newBox.height - (oldBox.y + oldBox.height)) > eps;
+
+              let outX = newBox.x;
+              let outWidth = newBox.width;
+              let outY = newBox.y;
+              let outHeight = newBox.height;
+              const newGuides: Guide[] = [];
+
+              if (leftMoving) {
+                const snapped = nearestSnapTarget(toLocalX(newBox.x), xTargets, thresholdX);
+                if (snapped != null) {
+                  const rightFixed = toLocalX(newBox.x + newBox.width);
+                  outX = snapped * sx + ox;
+                  outWidth = (rightFixed - snapped) * sx;
+                  newGuides.push({ axis: 'x', pos: snapped });
+                }
+              } else if (rightMoving) {
+                const snapped = nearestSnapTarget(toLocalX(newBox.x + newBox.width), xTargets, thresholdX);
+                if (snapped != null) {
+                  const leftFixed = toLocalX(newBox.x);
+                  outWidth = (snapped - leftFixed) * sx;
+                  newGuides.push({ axis: 'x', pos: snapped });
+                }
+              }
+
+              if (topMoving) {
+                const snapped = nearestSnapTarget(toLocalY(newBox.y), yTargets, thresholdY);
+                if (snapped != null) {
+                  const bottomFixed = toLocalY(newBox.y + newBox.height);
+                  outY = snapped * sy + oy;
+                  outHeight = (bottomFixed - snapped) * sy;
+                  newGuides.push({ axis: 'y', pos: snapped });
+                }
+              } else if (bottomMoving) {
+                const snapped = nearestSnapTarget(toLocalY(newBox.y + newBox.height), yTargets, thresholdY);
+                if (snapped != null) {
+                  const topFixed = toLocalY(newBox.y);
+                  outHeight = (snapped - topFixed) * sy;
+                  newGuides.push({ axis: 'y', pos: snapped });
+                }
+              }
+
+              setGuides(newGuides);
+              if (outWidth < 24 || outHeight < 24) return oldBox;
+              return { ...newBox, x: outX, y: outY, width: outWidth, height: outHeight };
+            }}
+            onTransformEnd={() => setGuides([])}
           />
         </Layer>
       </Stage>

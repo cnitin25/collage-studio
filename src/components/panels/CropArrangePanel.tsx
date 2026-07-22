@@ -4,7 +4,7 @@ import CollapsiblePanel from './CollapsiblePanel';
 import Slider from '../ui/Slider';
 import { coverCrop } from '../../utils/cover';
 
-export default function ArrangePanel() {
+export default function CropArrangePanel() {
   const selectedId = useEditorStore((s) => s.selectedId);
   const items = useEditorStore((s) => s.items);
   const canvas = useEditorStore((s) => s.canvas);
@@ -19,6 +19,14 @@ export default function ArrangePanel() {
   const updateItemLive = useEditorStore((s) => s.updateItemLive);
   const commitChange = useEditorStore((s) => s.commitChange);
 
+  const croppingId = useEditorStore((s) => s.croppingId);
+  const startCrop = useEditorStore((s) => s.startCrop);
+  const endCrop = useEditorStore((s) => s.endCrop);
+  const resetCrop = useEditorStore((s) => s.resetCrop);
+  const setCropZoom = useEditorStore((s) => s.setCropZoom);
+  const cropLocked = useEditorStore((s) => s.cropLocked);
+  const setCropLocked = useEditorStore((s) => s.setCropLocked);
+
   // Captures the aspect ratio + center point once, at gesture start, so
   // repeated onChange ticks during one drag resize FROM a fixed origin
   // rather than re-deriving from the already-mutated live value each tick.
@@ -27,6 +35,8 @@ export default function ArrangePanel() {
   const sel = items.find((i) => i.id === selectedId);
   if (!sel) return null;
   const id = sel.id;
+  const isImage = sel.type === 'image';
+  const cropping = isImage && croppingId === sel.id;
 
   const startResize = () => {
     if (sel.type !== 'image' || sel.height === 0) return;
@@ -57,9 +67,77 @@ export default function ArrangePanel() {
     commitChange();
   };
 
+  const base = isImage ? coverCrop(sel.naturalWidth, sel.naturalHeight, sel.width, sel.height) : null;
+  const zoom = isImage && sel.crop && base ? base.width / sel.crop.width : 1;
+
   return (
-    <CollapsiblePanel title="Arrange">
-<div className="btn-grid-2">
+    <CollapsiblePanel title="Crop and Arrange">
+      {isImage && (
+        <>
+          <label className="toggle-row">
+            <span>Lock aspect ratio</span>
+            <input
+              type="checkbox"
+              checked={!!sel.lockAspect}
+              onChange={(e) => updateItem(id, { lockAspect: e.target.checked })}
+            />
+          </label>
+
+          <div className="sliders" style={{ marginTop: 14 }}>
+            <Slider
+              label="Size (width)"
+              value={Math.round(sel.width)}
+              min={20}
+              max={Math.round(Math.max(canvas.width, canvas.height) * 2)}
+              onStart={startResize}
+              onChange={changeResize}
+              onEnd={endResize}
+            />
+          </div>
+
+          <p className="subhead">Crop</p>
+          <div className="chip-row">
+            <button
+              className={`chip ${cropping ? 'is-active' : ''}`}
+              onClick={() => (cropping ? endCrop() : startCrop(id))}
+              title={cropping ? 'Finish cropping this photo' : 'Start cropping this photo'}
+            >
+              {cropping ? 'Done' : 'Crop photo'}
+            </button>
+            <button className="chip" onClick={() => resetCrop(id)} title="Reset to a centered, uncropped fit">
+              Reset
+            </button>
+          </div>
+          <label className="toggle-row" title="Keep crop mode active when you select another photo">
+            <span>Stay in crop mode</span>
+            <input
+              type="checkbox"
+              checked={cropLocked}
+              onChange={(e) => setCropLocked(e.target.checked)}
+            />
+          </label>
+          {cropping && (
+            <>
+              <div className="sliders" style={{ marginTop: 14 }}>
+                <Slider
+                  label="Zoom"
+                  suffix="×"
+                  value={Number(zoom.toFixed(2))}
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  onStart={() => beginChange('Crop zoom')}
+                  onChange={(v) => setCropZoom(id, v)}
+                  onEnd={commitChange}
+                />
+              </div>
+              <p className="dim small">Drag the photo on the canvas to reposition.</p>
+            </>
+          )}
+        </>
+      )}
+
+      <div className="btn-grid-2" style={{ marginTop: isImage ? 18 : 0 }}>
         <button className="btn" onClick={() => bringToFront(id)} title="Move to the very top of the stack">Bring to front</button>
         <button className="btn" onClick={() => sendToBack(id)} title="Move to the very bottom of the stack">Send to back</button>
         <button className="btn" onClick={() => bringForward(id)} title="Move up one layer">Forward</button>
@@ -72,7 +150,7 @@ export default function ArrangePanel() {
         <button className="chip" onClick={() => rotateItem(id, 90)} title="Rotate 90° clockwise">↻ 90°</button>
       </div>
 
-      {sel.type === 'image' && (
+      {isImage && (
         <>
           <p className="subhead">Flip</p>
           <div className="chip-row">
@@ -81,15 +159,6 @@ export default function ArrangePanel() {
           </div>
 
           <div className="sliders" style={{ marginTop: 14 }}>
-            <Slider
-              label="Size (width)"
-              value={Math.round(sel.width)}
-              min={20}
-              max={Math.round(Math.max(canvas.width, canvas.height) * 2)}
-              onStart={startResize}
-              onChange={changeResize}
-              onEnd={endResize}
-            />
             <Slider
               label="Opacity"
               suffix="%"
@@ -101,15 +170,6 @@ export default function ArrangePanel() {
               onEnd={commitChange}
             />
           </div>
-
-          <label className="toggle-row">
-            <span>Lock aspect ratio</span>
-            <input
-              type="checkbox"
-              checked={!!sel.lockAspect}
-              onChange={(e) => updateItem(id, { lockAspect: e.target.checked })}
-            />
-          </label>
         </>
       )}
     </CollapsiblePanel>

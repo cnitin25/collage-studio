@@ -65,3 +65,23 @@ export function computeSnap(
   }
   return { x, y, guides };
 }
+
+/** Canvas-edge/center plus other items' edge/center positions along one axis. */
+export function collectSnapTargets(canvasSize: number, others: Box[], axis: 'x' | 'y'): number[] {
+  const targets = [0, canvasSize / 2, canvasSize];
+  for (const o of others) {
+    if (axis === 'x') targets.push(o.x, o.x + o.width / 2, o.x + o.width);
+    else targets.push(o.y, o.y + o.height / 2, o.y + o.height);
+  }
+  return targets;
+}
+
+/** Nearest target within threshold, or null if none is close enough. */
+export function nearestSnapTarget(value: number, targets: number[], threshold: number): number | null {
+  let best: { pos: number; dist: number } | null = null;
+  for (const t of targets) {
+    const dist = Math.abs(value - t);
+    if (dist <= threshold && (!best || dist < best.dist)) best = { pos: t, dist };
+  }
+  return best ? best.pos : null;
+}

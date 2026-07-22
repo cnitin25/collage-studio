@@ -3,9 +3,8 @@ import { useEditorStore } from '../../store/useEditorStore';
 import type { CanvasPreset } from '../../types';
 import { AccordionContext } from './AccordionContext';
 import LayoutPanel from './LayoutPanel';
-import ArrangePanel from './ArrangePanel';
+import CropArrangePanel from './CropArrangePanel';
 import EnhancePresetsPanel from './EnhancePresetsPanel';
-import CropPanel from './CropPanel';
 import StylePanel from './StylePanel';
 import InsertPanel from './InsertPanel';
 import TextPanel from './TextPanel';
@@ -53,9 +52,14 @@ export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
   const resetView = useEditorStore((s) => s.resetView);
 
   const [openId, setOpenId] = useState<string | null>('Canvas');
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
 
   const activePreset = PRESETS.find((p) => p.width === canvas.width && p.height === canvas.height);
-  const activePrintPreset = PRINT_PRESETS.find(
+  const orientedPrintPresets =
+    printOrientation === 'landscape'
+      ? PRINT_PRESETS.map((p) => ({ label: p.label, width: p.height, height: p.width }))
+      : PRINT_PRESETS;
+  const activePrintPreset = orientedPrintPresets.find(
     (p) => p.width === canvas.width && p.height === canvas.height,
   );
 
@@ -83,9 +87,23 @@ export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
           ))}
         </div>
 
-        <p className="subhead">Print (300 DPI)</p>
+        <div className="panel-head" style={{ marginTop: 0, marginBottom: 0 }}>
+          <p className="subhead" style={{ margin: 0 }}>Print (300 DPI)</p>
+          <div className="chip-row">
+            {(['portrait', 'landscape'] as const).map((o) => (
+              <button
+                key={o}
+                className={`chip ${printOrientation === o ? 'is-active' : ''}`}
+                onClick={() => setPrintOrientation(o)}
+                title={`${o[0].toUpperCase()}${o.slice(1)} orientation for print sizes`}
+              >
+                {o[0].toUpperCase()}{o.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="preset-grid">
-          {PRINT_PRESETS.map((p) => (
+          {orientedPrintPresets.map((p) => (
             <button
               key={p.label}
               className={`preset ${activePrintPreset?.label === p.label ? 'is-active' : ''}`}
@@ -119,10 +137,9 @@ export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
       <InsertPanel />
 
       <AlignPanel />
-      <ArrangePanel />
+      <CropArrangePanel />
 
       <TextPanel />
-      <CropPanel />
       <EnhancePresetsPanel />
       <StylePanel />
 

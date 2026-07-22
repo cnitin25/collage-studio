@@ -52,6 +52,20 @@ export async function saveProject(args: {
     }
   }
 
+  // The background image lives on `canvas`, not in `items` — it needs the
+  // same blob-persistence treatment or it silently vanishes on reopen (the
+  // src is a blob: URL that dies with the page).
+  const { backgroundType, backgroundImageSrc, backgroundAssetId } = state.canvas;
+  if (backgroundType === 'image' && backgroundImageSrc && backgroundAssetId && !seen.has(backgroundAssetId)) {
+    seen.add(backgroundAssetId);
+    try {
+      const blob = await fetch(backgroundImageSrc).then((r) => r.blob());
+      await putAsset(backgroundAssetId, blob);
+    } catch {
+      // image no longer available — skip; it just won't restore
+    }
+  }
+
   // `thumbnail` is optional per call (e.g. auto-save doesn't render one). Since
   // IndexedDB put() fully replaces the record rather than merging, an omitted
   // thumbnail must fall back to whatever was already stored — otherwise every
@@ -63,10 +77,14 @@ export async function saveProject(args: {
     finalThumbnail = existing?.thumbnail;
   }
 
-  // Strip volatile object URLs; the blob lives in the assets store now.
+  // Strip volatile object URLs; the blobs live in the assets store now.
   const items = state.items.map((it) => (it.type === 'image' ? { ...it, src: '' } : { ...it }));
+  const canvas =
+    backgroundType === 'image' && backgroundAssetId
+      ? { ...state.canvas, backgroundImageSrc: '' }
+      : state.canvas;
   const updatedAt = Date.now();
-  await putProjectRec({ id, name, updatedAt, thumbnail: finalThumbnail, state: { ...state, items } });
+  await putProjectRec({ id, name, updatedAt, thumbnail: finalThumbnail, state: { ...state, items, canvas } });
   return { id, name, updatedAt, thumbnail: finalThumbnail };
 }
 
@@ -86,9 +104,15 @@ export async function openProject(
     }
   }
 
+  let canvas = rec.state.canvas;
+  if (canvas.backgroundType === 'image' && canvas.backgroundAssetId) {
+    const blob = await getAssetBlob(canvas.backgroundAssetId);
+    canvas = { ...canvas, backgroundImageSrc: blob ? URL.createObjectURL(blob) : '' };
+  }
+
   return {
     meta: { id: rec.id, name: rec.name, updatedAt: rec.updatedAt, thumbnail: rec.thumbnail },
-    state: { ...rec.state, items },
+    state: { ...rec.state, items, canvas },
   };
 }
 
