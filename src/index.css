@@ -275,20 +275,34 @@ button {
   right: 280px;
   transform: translate(50%, -50%);
   z-index: 5;
-  width: 20px;
-  height: 40px;
+  width: 22px;
+  height: 44px;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--panel);
-  color: var(--text);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: right 0.18s ease;
+  box-shadow: 0 2px 10px var(--shadow-color);
+  transition: right 0.18s ease, background 0.15s ease, border-color 0.15s ease;
 }
-.inspector-collapse-toggle.is-collapsed { right: 0; }
+.inspector-collapse-toggle:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.inspector-collapse-toggle.is-collapsed {
+  /* Collapsed, there's no sidebar edge to straddle — the expanded state's
+     translate(50%) would push half the button past the workspace's right
+     edge and off-screen instead, leaving only a sliver visible. */
+  right: 6px;
+  transform: translate(0, -50%);
+}
 
 /* Drawer header (Tools label + close button) only shows once .inspector
    becomes an overlay drawer in compact mode — see responsive block below. */
