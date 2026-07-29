@@ -95,7 +95,7 @@ export default function BackgroundPanel() {
   };
 
   return (
-    <CollapsiblePanel title="Background">
+    <CollapsiblePanel title="Collage Background">
 
       <div className="chip-row wrap">
         {TYPES.map((t) => (

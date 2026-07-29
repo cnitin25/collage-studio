@@ -39,6 +39,11 @@ const ALL_ANCHORS = [
   'top-left', 'top-center', 'top-right', 'middle-left',
   'middle-right', 'bottom-left', 'bottom-center', 'bottom-right',
 ];
+// Text has no independently resizable height — its height is always derived
+// from fontSize (see itemBox below), so only the width-changing side handles
+// are offered. Locking to corner/keepRatio anchors here fought with that
+// derived height and produced runaway/zero-height boxes.
+const TEXT_ANCHORS = ['middle-left', 'middle-right'];
 
 function itemBox(it: CollageItem): Box {
   if (it.type === 'sticker') return { x: it.x, y: it.y, width: it.fontSize, height: it.fontSize };
@@ -341,10 +346,13 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
   };
 
   const selected = items.find((i) => i.id === selectedId);
+  const isTextSelected = selected?.type === 'text';
   const lockRatio = selected
-    ? selected.type === 'text' || selected.type === 'sticker'
+    ? selected.type === 'sticker'
       ? true
-      : !!selected.lockAspect
+      : isTextSelected
+        ? false
+        : !!selected.lockAspect
     : false;
   const scale = display.scale;
 
@@ -477,7 +485,9 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
             ref={trRef}
             rotateEnabled={!isCroppingSelected}
             keepRatio={lockRatio}
-            enabledAnchors={isCroppingSelected ? [] : lockRatio ? CORNER_ANCHORS : ALL_ANCHORS}
+            enabledAnchors={
+              isCroppingSelected ? [] : isTextSelected ? TEXT_ANCHORS : lockRatio ? CORNER_ANCHORS : ALL_ANCHORS
+            }
             anchorStroke="#ff7a59"
             anchorFill="#ffffff"
             anchorSize={coarsePointer ? 22 : 10}
@@ -485,7 +495,11 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
             borderStrokeWidth={isCroppingSelected ? 3 : 1}
             borderDash={[4, 4]}
             boundBoxFunc={(oldBox, newBox) => {
-              if (newBox.width < 24 || newBox.height < 24) return oldBox;
+              // Text only resizes horizontally (see TEXT_ANCHORS above), so its
+              // height — a derived value, not a user-set one — must never gate
+              // a width resize. Without this, a small fontSize (auto-height
+              // under 24px) would silently reject every resize attempt.
+              if (newBox.width < 24 || (!isTextSelected && newBox.height < 24)) return oldBox;
 
               // Resize snapping only for axis-aligned, non-ratio-locked boxes —
               // once rotated or ratio-locked, "left edge"/"right edge" stop being
@@ -558,7 +572,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
               }
 
               setGuides(newGuides);
-              if (outWidth < 24 || outHeight < 24) return oldBox;
+              if (outWidth < 24 || (!isTextSelected && outHeight < 24)) return oldBox;
               return { ...newBox, x: outX, y: outY, width: outWidth, height: outHeight };
             }}
             onTransformEnd={() => setGuides([])}

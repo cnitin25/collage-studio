@@ -214,6 +214,7 @@ button {
   flex: 1;
   display: flex;
   min-height: 0;
+  position: relative;
 }
 
 .stage-host {
@@ -254,7 +255,40 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  transition: width 0.18s ease, padding 0.18s ease, border-color 0.18s ease;
 }
+
+/* Desktop-only collapse (see .inspector-collapse-toggle) — mobile ignores
+   this since its own is-open/transform rules in the responsive block win. */
+.inspector.is-collapsed {
+  width: 0;
+  padding: 0;
+  border-left-color: transparent;
+  overflow: hidden;
+}
+
+/* Small tab anchored to the sidebar's left edge so it stays reachable even
+   when the sidebar itself has collapsed to zero width. */
+.inspector-collapse-toggle {
+  position: absolute;
+  top: 50%;
+  right: 280px;
+  transform: translate(50%, -50%);
+  z-index: 5;
+  width: 20px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: right 0.18s ease;
+}
+.inspector-collapse-toggle.is-collapsed { right: 0; }
 
 /* Drawer header (Tools label + close button) only shows once .inspector
    becomes an overlay drawer in compact mode — see responsive block below. */
@@ -1284,6 +1318,10 @@ button {
 
   /* ---- Workspace: canvas full-width, inspector becomes a slide-in drawer ---- */
   .stage-col { min-width: 0; width: 100%; }
+
+  /* Mobile already has its own drawer toggle (.toolbar-tools-toggle) and
+     scrim-dismiss; the desktop collapse tab would just double up on it. */
+  .inspector-collapse-toggle { display: none; }
 
   .inspector {
     position: fixed;

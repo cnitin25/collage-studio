@@ -19,7 +19,7 @@ export default function AlignPanel() {
   if (!selectedId) return null;
 
   return (
-    <CollapsiblePanel title="Align to canvas">
+    <CollapsiblePanel title="Photo Alignment">
 <div className="btn-grid-3">
         {ALIGNS.map((a) => (
           <button

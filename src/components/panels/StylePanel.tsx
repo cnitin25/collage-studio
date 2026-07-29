@@ -29,7 +29,7 @@ export default function StylePanel() {
   };
 
   return (
-    <CollapsiblePanel title="Frame & border">
+    <CollapsiblePanel title="Photo Border">
 
       <p className="subhead" style={{ marginTop: 0 }}>Shape</p>
       <div className="chip-row wrap">

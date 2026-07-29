@@ -32,6 +32,9 @@ export default function App() {
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  // Desktop-only: collapses the always-visible sidebar to reclaim canvas
+  // width. Distinct from toolsOpen, which drives the mobile slide-in drawer.
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
 
   const theme = useThemeStore((s) => s.theme);
   useEffect(() => {
@@ -176,7 +179,24 @@ export default function App() {
       />
       <div className="workspace">
         <div className="stage-col">
-          <div className="stage-host" ref={stageHostRef} {...getRootProps()}>
+          <div
+            className="stage-host"
+            {...(() => {
+              // getRootProps() returns its own `ref` for drag-state tracking,
+              // which would silently clobber stageHostRef (spread order) —
+              // merge both so the dropzone and TextEditOverlay's position
+              // math share the same DOM node.
+              const { ref: dropzoneRef, ...rootProps } = getRootProps();
+              return {
+                ...rootProps,
+                ref: (node: HTMLDivElement | null) => {
+                  (stageHostRef as { current: HTMLDivElement | null }).current = node;
+                  if (typeof dropzoneRef === 'function') dropzoneRef(node);
+                  else if (dropzoneRef) (dropzoneRef as { current: HTMLElement | null }).current = node;
+                },
+              };
+            })()}
+          >
             <input {...getInputProps()} />
             <CanvasStage ref={canvasRef} />
             <TextEditOverlay hostRef={stageHostRef} getStage={() => canvasRef.current?.getStage() ?? null} />
@@ -196,7 +216,15 @@ export default function App() {
           <ThumbnailStrip />
         </div>
         {toolsOpen && <div className="drawer-scrim" onClick={() => setToolsOpen(false)} />}
-        <InspectorPanel open={toolsOpen} onClose={() => setToolsOpen(false)} />
+        <button
+          className={`inspector-collapse-toggle ${panelCollapsed ? 'is-collapsed' : ''}`}
+          onClick={() => setPanelCollapsed((v) => !v)}
+          title={panelCollapsed ? 'Show tools panel' : 'Hide tools panel'}
+          aria-label={panelCollapsed ? 'Show tools panel' : 'Hide tools panel'}
+        >
+          {panelCollapsed ? '‹' : '›'}
+        </button>
+        <InspectorPanel open={toolsOpen} onClose={() => setToolsOpen(false)} collapsed={panelCollapsed} />
       </div>
       <StatusBar />
       <ProjectsModal open={projectsOpen} onClose={() => setProjectsOpen(false)} />

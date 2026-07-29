@@ -27,6 +27,7 @@ export default function Toolbar({
   const canRedo = useEditorStore((s) => s.future.length > 0);
   const removeSelected = useEditorStore((s) => s.removeSelected);
   const duplicateSelected = useEditorStore((s) => s.duplicateSelected);
+  const clearAll = useEditorStore((s) => s.clearAll);
   const selectedId = useEditorStore((s) => s.selectedId);
   const itemCount = useEditorStore((s) => s.items.length);
   const projectName = useEditorStore((s) => s.projectName);
@@ -60,6 +61,13 @@ export default function Toolbar({
   const runFromMenu = (fn: () => void) => {
     fn();
     setMenuOpen(false);
+  };
+
+  const handleClearCanvas = () => {
+    if (itemCount === 0) return;
+    if (window.confirm('Clear the entire canvas? This removes every photo, text box, and sticker.')) {
+      clearAll();
+    }
   };
 
   return (
@@ -102,6 +110,14 @@ export default function Toolbar({
           </button>
           <button className="btn" onClick={removeSelected} disabled={!selectedId} title="Delete (Del)">
             Delete
+          </button>
+          <button
+            className="btn"
+            onClick={handleClearCanvas}
+            disabled={itemCount === 0}
+            title="Remove every photo, text, and sticker from the canvas"
+          >
+            Clear canvas
           </button>
           <div className="divider" />
           <button className="btn" onClick={onOpenProjects} title="Open, save, or delete saved projects">
@@ -168,6 +184,14 @@ export default function Toolbar({
                 onClick={() => runFromMenu(removeSelected)}
               >
                 🗑 Delete
+              </button>
+              <button
+                className="overflow-item"
+                role="menuitem"
+                disabled={itemCount === 0}
+                onClick={() => runFromMenu(handleClearCanvas)}
+              >
+                🧹 Clear canvas
               </button>
               <button className="overflow-item" role="menuitem" onClick={() => runFromMenu(onOpenProjects)}>
                 ▤ Projects

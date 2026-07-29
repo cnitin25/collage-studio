@@ -36,6 +36,7 @@ interface EditorState {
   croppingId: string | null;
   cropLocked: boolean;
   editingId: string | null; // text being edited inline
+  requestedPanel: string | null; // panel title to auto-expand (e.g. after Add text)
   spacing: SpacingOptions;
   lastLayout: LayoutSpec | null;
   exportScale: number;
@@ -98,6 +99,7 @@ interface EditorState {
 
   startEditingText: (id: string) => void;
   stopEditingText: () => void;
+  clearRequestedPanel: () => void;
 
   setSpacingLive: (patch: Partial<SpacingOptions>) => void;
   select: (id: string | null) => void;
@@ -220,6 +222,7 @@ export const useEditorStore = create<EditorState>()(
     croppingId: null,
     cropLocked: false,
     editingId: null,
+    requestedPanel: null,
     spacing: DEFAULT_SPACING,
     lastLayout: null,
     exportScale: 1,
@@ -289,6 +292,7 @@ export const useEditorStore = create<EditorState>()(
         s.items.push(item);
         s.selectedId = id;
         s.editingId = id;
+        s.requestedPanel = 'Insert';
       });
     },
 
@@ -824,6 +828,11 @@ export const useEditorStore = create<EditorState>()(
       set((s) => {
         s.selectedId = id;
         s.editingId = id;
+      }),
+
+    clearRequestedPanel: () =>
+      set((s) => {
+        s.requestedPanel = null;
       }),
 
     stopEditingText: () =>

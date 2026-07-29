@@ -97,6 +97,11 @@ test.describe('mobile layout', () => {
     // input until there's at least one item — add one first, same as a real
     // pinch-to-zoom would only ever happen on an actual collage.
     await page.locator('button[title="Add an editable text box to the canvas"]').click();
+    // Added text opens directly in in-canvas edit mode (a focused textarea
+    // over the text box) — commit it first, same as a real user tapping
+    // away before pinch-zooming, so the gesture reaches the canvas instead
+    // of the text field sitting on top of it.
+    await page.keyboard.press('Escape');
 
     const before = await getView(page);
     expect(before.viewScale).toBe(1);
@@ -109,7 +114,10 @@ test.describe('mobile layout', () => {
     expect(afterPinch.viewScale).toBeGreaterThan(before.viewScale);
 
     // Reset zoom / pan lives in the Canvas panel — open the drawer to reach it.
+    // Adding text auto-expands the Insert panel (collapsing Canvas, since only
+    // one section is open at a time), so re-open Canvas explicitly first.
     await page.locator('.toolbar-tools-toggle').click();
+    await page.locator('.panel-toggle', { hasText: 'Canvas' }).click();
     await page.getByRole('button', { name: 'Reset zoom / pan' }).click();
     const afterReset = await getView(page);
     expect(afterReset).toEqual({ viewScale: 1, viewX: 0, viewY: 0 });

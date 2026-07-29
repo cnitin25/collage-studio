@@ -55,12 +55,13 @@ export default function TextNode({
         const sx = node.scaleX();
         node.scaleX(1);
         node.scaleY(1);
+        // Resizing the box only rewraps the text (width); font size is left
+        // untouched so box and text size can be changed independently.
         onChange({
           x: node.x(),
           y: node.y(),
           rotation: node.rotation(),
           width: Math.max(20, node.width() * sx),
-          fontSize: Math.max(6, item.fontSize * sx),
         });
       }}
     />

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useEditorStore } from '../../store/useEditorStore';
 import type { CanvasPreset } from '../../types';
 import { AccordionContext } from './AccordionContext';
@@ -7,7 +7,6 @@ import CropArrangePanel from './CropArrangePanel';
 import EnhancePresetsPanel from './EnhancePresetsPanel';
 import StylePanel from './StylePanel';
 import InsertPanel from './InsertPanel';
-import TextPanel from './TextPanel';
 import BackgroundPanel from './BackgroundPanel';
 import AlignPanel from './AlignPanel';
 import HistoryPanel from './HistoryPanel';
@@ -34,13 +33,14 @@ const PRINT_PRESETS: CanvasPreset[] = [
 interface Props {
   open?: boolean;
   onClose?: () => void;
+  collapsed?: boolean;
 }
 
-export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
+export default function InspectorPanel({ open: drawerOpen, onClose, collapsed }: Props) {
   const canvas = useEditorStore((s) => s.canvas);
   const setCanvasSize = useEditorStore((s) => s.setCanvasSize);
-  const clearAll = useEditorStore((s) => s.clearAll);
-  const itemCount = useEditorStore((s) => s.items.length);
+  const requestedPanel = useEditorStore((s) => s.requestedPanel);
+  const clearRequestedPanel = useEditorStore((s) => s.clearRequestedPanel);
   const exportScale = useEditorStore((s) => s.exportScale);
   const setExportScale = useEditorStore((s) => s.setExportScale);
   const exportFileName = useEditorStore((s) => s.exportFileName);
@@ -54,6 +54,13 @@ export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
   const [openId, setOpenId] = useState<string | null>('Canvas');
   const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
 
+  useEffect(() => {
+    if (requestedPanel) {
+      setOpenId(requestedPanel);
+      clearRequestedPanel();
+    }
+  }, [requestedPanel, clearRequestedPanel]);
+
   const activePreset = PRESETS.find((p) => p.width === canvas.width && p.height === canvas.height);
   const orientedPrintPresets =
     printOrientation === 'landscape'
@@ -64,7 +71,7 @@ export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
   );
 
   return (
-    <aside className={`inspector ${drawerOpen ? 'is-open' : ''}`}>
+    <aside className={`inspector ${drawerOpen ? 'is-open' : ''} ${collapsed ? 'is-collapsed' : ''}`}>
     <div className="inspector-drawer-head">
       <span>Tools</span>
       <button className="btn btn-ghost inspector-close" onClick={onClose} aria-label="Close tools" title="Close tools">
@@ -139,7 +146,6 @@ export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
       <AlignPanel />
       <CropArrangePanel />
 
-      <TextPanel />
       <EnhancePresetsPanel />
       <StylePanel />
 
@@ -147,9 +153,7 @@ export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
 
       <FramePanel />
 
-      <HistoryPanel />
-
-      <CollapsiblePanel title="Export">
+      <CollapsiblePanel title="Export settings">
         <input
           className="text-input"
           style={{ minHeight: 0, marginBottom: 10 }}
@@ -188,16 +192,7 @@ export default function InspectorPanel({ open: drawerOpen, onClose }: Props) {
         </p>
       </CollapsiblePanel>
 
-      <section className="panel">
-        <button
-          className="btn btn-ghost full"
-          onClick={clearAll}
-          disabled={itemCount === 0}
-          title="Remove every photo, text, and sticker from the canvas"
-        >
-          Clear canvas
-        </button>
-      </section>
+      <HistoryPanel />
     </AccordionContext.Provider>
     </aside>
   );
