@@ -12,7 +12,6 @@ export default function CropArrangePanel() {
   const sendToBack = useEditorStore((s) => s.sendToBack);
   const bringForward = useEditorStore((s) => s.bringForward);
   const sendBackward = useEditorStore((s) => s.sendBackward);
-  const updateItem = useEditorStore((s) => s.updateItem);
   const flipItem = useEditorStore((s) => s.flipItem);
   const rotateItem = useEditorStore((s) => s.rotateItem);
   const beginChange = useEditorStore((s) => s.beginChange);
@@ -24,8 +23,6 @@ export default function CropArrangePanel() {
   const endCrop = useEditorStore((s) => s.endCrop);
   const resetCrop = useEditorStore((s) => s.resetCrop);
   const setCropZoom = useEditorStore((s) => s.setCropZoom);
-  const cropLocked = useEditorStore((s) => s.cropLocked);
-  const setCropLocked = useEditorStore((s) => s.setCropLocked);
 
   // Captures the aspect ratio + center point once, at gesture start, so
   // repeated onChange ticks during one drag resize FROM a fixed origin
@@ -74,15 +71,6 @@ export default function CropArrangePanel() {
     <CollapsiblePanel title="Crop and Arrange">
       {isImage && (
         <>
-          <label className="toggle-row">
-            <span>Lock aspect ratio</span>
-            <input
-              type="checkbox"
-              checked={!!sel.lockAspect}
-              onChange={(e) => updateItem(id, { lockAspect: e.target.checked })}
-            />
-          </label>
-
           <div className="sliders" style={{ marginTop: 14 }}>
             <Slider
               label="Size (width)"
@@ -108,14 +96,6 @@ export default function CropArrangePanel() {
               Reset
             </button>
           </div>
-          <label className="toggle-row" title="Keep crop mode active when you select another photo">
-            <span>Stay in crop mode</span>
-            <input
-              type="checkbox"
-              checked={cropLocked}
-              onChange={(e) => setCropLocked(e.target.checked)}
-            />
-          </label>
           {cropping && (
             <>
               <div className="sliders" style={{ marginTop: 14 }}>

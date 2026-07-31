@@ -49,8 +49,6 @@ export default function LayoutPanel() {
   const setSpacingLive = useEditorStore((s) => s.setSpacingLive);
   const beginChange = useEditorStore((s) => s.beginChange);
   const commitChange = useEditorStore((s) => s.commitChange);
-  const layoutLocked = useEditorStore((s) => s.layoutLocked);
-  const setLayoutLocked = useEditorStore((s) => s.setLayoutLocked);
 
   const imageItems = items.filter((it): it is ImageItem => it.type === 'image');
   const hasItems = imageItems.length > 0;
@@ -154,15 +152,6 @@ export default function LayoutPanel() {
           Custom sizes — spacing won't reflow until you click a layout above.
         </p>
       )}
-
-      <label className="toggle-row">
-        <span>Lock layout</span>
-        <input
-          type="checkbox"
-          checked={layoutLocked}
-          onChange={(e) => setLayoutLocked(e.target.checked)}
-        />
-      </label>
     </CollapsiblePanel>
   );
 }

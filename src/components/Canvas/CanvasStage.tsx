@@ -59,6 +59,8 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
   const editingId = useEditorStore((s) => s.editingId);
   const layoutLocked = useEditorStore((s) => s.layoutLocked);
   const snapEnabled = useEditorStore((s) => s.snapEnabled);
+  const swapModeEnabled = useEditorStore((s) => s.swapModeEnabled);
+  const lockAspectEnabled = useEditorStore((s) => s.lockAspectEnabled);
   const viewScale = useEditorStore((s) => s.viewScale);
   const viewX = useEditorStore((s) => s.viewX);
   const viewY = useEditorStore((s) => s.viewY);
@@ -318,7 +320,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
       setGuides(snapped.guides);
     }
 
-    if (item.type === 'image') {
+    if (item.type === 'image' && swapModeEnabled) {
       const cx = box.x + item.width / 2;
       const cy = box.y + item.height / 2;
       const target = items.find(
@@ -337,7 +339,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
   const handleNodeDragEnd = (id: string, node: Konva.Node) => {
     setGuides([]);
     const item = items.find((i) => i.id === id);
-    if (item?.type === 'image' && dropTargetId && dropTargetId !== id) {
+    if (swapModeEnabled && item?.type === 'image' && dropTargetId && dropTargetId !== id) {
       swapItems(id, dropTargetId);
     } else {
       updateItem(id, { x: node.x(), y: node.y() });
@@ -352,7 +354,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
       ? true
       : isTextSelected
         ? false
-        : !!selected.lockAspect
+        : lockAspectEnabled
     : false;
   const scale = display.scale;
 

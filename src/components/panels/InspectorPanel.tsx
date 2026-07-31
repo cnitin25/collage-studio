@@ -12,6 +12,7 @@ import AlignPanel from './AlignPanel';
 import HistoryPanel from './HistoryPanel';
 import CustomSizeFields from './CustomSizeFields';
 import FramePanel from './FramePanel';
+import SettingsPanel from './SettingsPanel';
 import CollapsiblePanel from './CollapsiblePanel';
 
 const PRESETS: CanvasPreset[] = [
@@ -47,8 +48,6 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed }:
   const setExportFileName = useEditorStore((s) => s.setExportFileName);
   const exportFormat = useEditorStore((s) => s.exportFormat);
   const setExportFormat = useEditorStore((s) => s.setExportFormat);
-  const snapEnabled = useEditorStore((s) => s.snapEnabled);
-  const setSnapEnabled = useEditorStore((s) => s.setSnapEnabled);
   const resetView = useEditorStore((s) => s.resetView);
 
   const [openId, setOpenId] = useState<string | null>('Canvas');
@@ -125,10 +124,6 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed }:
 
         <p className="dim small">{canvas.width} × {canvas.height} px</p>
         <CustomSizeFields width={canvas.width} height={canvas.height} onApply={setCanvasSize} />
-        <label className="toggle-row" title="Snap edges/centers to the canvas and other items while dragging">
-          <span>Snap &amp; guides</span>
-          <input type="checkbox" checked={snapEnabled} onChange={(e) => setSnapEnabled(e.target.checked)} />
-        </label>
         <button
           className="btn btn-ghost full"
           style={{ marginTop: 10 }}
@@ -152,6 +147,8 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed }:
       <BackgroundPanel />
 
       <FramePanel />
+
+      <SettingsPanel />
 
       <CollapsiblePanel title="Export settings">
         <input

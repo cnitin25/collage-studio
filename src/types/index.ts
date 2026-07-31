@@ -14,8 +14,6 @@ export interface BaseItem {
   height: number;
   /** degrees */
   rotation: number;
-  /** lock width:height ratio while resizing (Phase 4) */
-  lockAspect?: boolean;
   /** 0–100, default 100 */
   opacity?: number;
 

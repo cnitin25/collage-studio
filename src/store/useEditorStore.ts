@@ -47,6 +47,8 @@ interface EditorState {
   projectName: string;
   layoutLocked: boolean;
   snapEnabled: boolean;
+  swapModeEnabled: boolean;
+  lockAspectEnabled: boolean;
   autoSaveEnabled: boolean;
   importFailures: ImageLoadFailure[];
   // view state (not part of undo history)
@@ -114,6 +116,8 @@ interface EditorState {
   resetView: () => void;
   setLayoutLocked: (v: boolean) => void;
   setSnapEnabled: (v: boolean) => void;
+  setSwapModeEnabled: (v: boolean) => void;
+  setLockAspectEnabled: (v: boolean) => void;
   setAutoSaveEnabled: (v: boolean) => void;
   setImportFailures: (failures: ImageLoadFailure[]) => void;
   loadSerializedState: (state: SerializedState, id: string, name: string) => void;
@@ -233,6 +237,8 @@ export const useEditorStore = create<EditorState>()(
     projectName: 'Untitled',
     layoutLocked: false,
     snapEnabled: true,
+    swapModeEnabled: true,
+    lockAspectEnabled: false,
     autoSaveEnabled: false,
     importFailures: [],
     viewScale: 1,
@@ -893,6 +899,16 @@ export const useEditorStore = create<EditorState>()(
         s.snapEnabled = v;
       }),
 
+    setSwapModeEnabled: (v) =>
+      set((s) => {
+        s.swapModeEnabled = v;
+      }),
+
+    setLockAspectEnabled: (v) =>
+      set((s) => {
+        s.lockAspectEnabled = v;
+      }),
+
     setAutoSaveEnabled: (v) =>
       set((s) => {
         s.autoSaveEnabled = v;
@@ -1042,13 +1058,32 @@ export const useEditorStore = create<EditorState>()(
         if (!it) return;
         const iw = it.type === 'sticker' ? it.fontSize : it.width;
         const ih = it.type === 'sticker' ? it.fontSize : it.type === 'text' ? it.fontSize * 1.3 : it.height;
+
+        // Items rotate around their top-left corner (item.x, item.y) — Konva's
+        // default pivot when no offsetX/offsetY is set (see ImageNode/StickerNode/
+        // TextNode). So the visual bounding box after rotation is not simply
+        // [x, x+iw] x [y, y+ih]; it has to be derived from the rotated corners.
+        const rad = (it.rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const corners = [
+          { x: 0, y: 0 },
+          { x: iw, y: 0 },
+          { x: 0, y: ih },
+          { x: iw, y: ih },
+        ].map((p) => ({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos }));
+        const minX = Math.min(...corners.map((p) => p.x));
+        const maxX = Math.max(...corners.map((p) => p.x));
+        const minY = Math.min(...corners.map((p) => p.y));
+        const maxY = Math.max(...corners.map((p) => p.y));
+
         switch (anchor) {
-          case 'left':       it.x = 0; break;
-          case 'center-x':  it.x = (cw - iw) / 2; break;
-          case 'right':      it.x = cw - iw; break;
-          case 'top':        it.y = 0; break;
-          case 'center-y':  it.y = (ch - ih) / 2; break;
-          case 'bottom':     it.y = ch - ih; break;
+          case 'left':      it.x = -minX; break;
+          case 'center-x':  it.x = cw / 2 - (minX + maxX) / 2; break;
+          case 'right':     it.x = cw - maxX; break;
+          case 'top':       it.y = -minY; break;
+          case 'center-y':  it.y = ch / 2 - (minY + maxY) / 2; break;
+          case 'bottom':    it.y = ch - maxY; break;
         }
       });
     },
