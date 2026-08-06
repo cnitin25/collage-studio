@@ -21,6 +21,7 @@ specific to working here with Claude Code, or worth calling out twice.
   build (`tsc -b`) and won't be type-checked or built by root-level commands.
   Run its install and tests from inside `e2e/`, or via the root's
   `npm run test:e2e` convenience script.
+  Update `README.md` file after every update of the project. `README.md` should have the features added in the project, resources and project structure
 
 ## Things easy to miss by only reading the code
 

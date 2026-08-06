@@ -33,7 +33,7 @@ export default function CollapsiblePanel({
   };
 
   return (
-    <section className="panel">
+    <section className="panel" data-panel-title={title}>
       <div className="panel-head">
         <button className="panel-toggle" onClick={toggle} aria-expanded={open}>
           <span className={`chevron ${open ? 'is-open' : ''}`}>›</span>

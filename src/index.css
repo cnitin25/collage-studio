@@ -164,6 +164,27 @@ button {
 }
 .overflow-item:hover:not(:disabled) { background: var(--panel-hi); }
 .overflow-item:disabled { opacity: 0.4; cursor: not-allowed; }
+.overflow-item.is-active { background: var(--panel-hi); }
+
+.command-search { position: relative; flex-shrink: 0; }
+.command-search-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+}
+.command-search-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.command-search-results {
+  left: 0;
+  right: auto;
+  width: 100%;
+  max-height: 320px;
+  overflow-y: auto;
+}
 
 .divider {
   width: 1px;
@@ -313,7 +334,12 @@ button {
 }
 .inspector-close { padding: 0 10px; }
 
+/* Only meaningful once .inspector becomes a slide-in drawer (see the
+   max-width: 768px block) — toolsOpen can now also be set from a
+   desktop-visible control (CommandSearch), so this must stay inert above
+   that breakpoint rather than relying on its trigger being hidden. */
 .drawer-scrim {
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 30;
@@ -1349,6 +1375,7 @@ button {
   }
   .inspector.is-open { transform: translateX(0); }
   .inspector-drawer-head { display: flex; margin-bottom: 8px; }
+  .drawer-scrim { display: block; }
 
   /* ---- Cosmetic: status bar, custom-size fields ---- */
   .status-bar { gap: 6px; overflow: hidden; }

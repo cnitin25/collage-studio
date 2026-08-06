@@ -14,6 +14,7 @@ import CustomSizeFields from './CustomSizeFields';
 import FramePanel from './FramePanel';
 import SettingsPanel from './SettingsPanel';
 import CollapsiblePanel from './CollapsiblePanel';
+import CommandSearch from '../CommandSearch';
 
 const PRESETS: CanvasPreset[] = [
   { label: 'Square', width: 1080, height: 1080 },
@@ -57,6 +58,14 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed }:
     if (requestedPanel) {
       setOpenId(requestedPanel);
       clearRequestedPanel();
+      // Wait a frame for the newly-opened panel (and the ones that just
+      // collapsed above it) to settle their heights before scrolling, or
+      // the target position would be computed against the pre-collapse layout.
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-panel-title="${requestedPanel}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     }
   }, [requestedPanel, clearRequestedPanel]);
 
@@ -77,6 +86,7 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed }:
         ✕
       </button>
     </div>
+    <CommandSearch />
     <AccordionContext.Provider value={{ openId, setOpenId }}>
       <CollapsiblePanel title="Canvas">
         <div className="preset-grid">

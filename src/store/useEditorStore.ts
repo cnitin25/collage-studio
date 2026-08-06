@@ -103,6 +103,7 @@ interface EditorState {
   startEditingText: (id: string) => void;
   stopEditingText: () => void;
   clearRequestedPanel: () => void;
+  requestPanel: (title: string) => void;
 
   setSpacingLive: (patch: Partial<SpacingOptions>) => void;
   select: (id: string | null) => void;
@@ -868,6 +869,11 @@ export const useEditorStore = create<EditorState>()(
     clearRequestedPanel: () =>
       set((s) => {
         s.requestedPanel = null;
+      }),
+
+    requestPanel: (title) =>
+      set((s) => {
+        s.requestedPanel = title;
       }),
 
     stopEditingText: () =>
