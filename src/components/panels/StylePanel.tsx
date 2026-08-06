@@ -101,7 +101,7 @@ export default function StylePanel() {
       </div>
       {sel.borderStyle === 'glyph' && (
         <div className="chip-row wrap" style={{ marginTop: 8 }}>
-          {['✕', '◯', '/', '\\', '•', '＋', '★', '~'].map((g) => (
+          {['✕', 'O', '/', '\\', '•', '＋', '★', '~'].map((g) => (
             <button
               key={g}
               className={`chip ${(sel.borderGlyph || '✕') === g ? 'is-active' : ''}`}

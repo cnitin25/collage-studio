@@ -146,7 +146,14 @@ export interface CanvasConfig {
 /** The subset of an image's look that can be copied to other photos. */
 export type ImageStyle = Pick<
   ImageItem,
-  'borderWidth' | 'borderColor' | 'cornerRadius' | 'shadow' | 'frame' | 'filters'
+  | 'borderWidth'
+  | 'borderColor'
+  | 'borderStyle'
+  | 'borderGlyph'
+  | 'cornerRadius'
+  | 'shadow'
+  | 'frame'
+  | 'filters'
 >;
 
 export interface CanvasPreset {

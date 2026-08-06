@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../store/useEditorStore';
 import { useThemeStore } from '../store/useThemeStore';
+import { loadImageFile } from '../utils/loadImage';
 
 interface Props {
   onAddImages: () => void;
@@ -29,6 +30,11 @@ export default function Toolbar({
   const duplicateSelected = useEditorStore((s) => s.duplicateSelected);
   const clearAll = useEditorStore((s) => s.clearAll);
   const selectedId = useEditorStore((s) => s.selectedId);
+  const selectedIsImage = useEditorStore(
+    (s) => s.items.find((i) => i.id === s.selectedId)?.type === 'image',
+  );
+  const replaceImage = useEditorStore((s) => s.replaceImage);
+  const setImportFailures = useEditorStore((s) => s.setImportFailures);
   const itemCount = useEditorStore((s) => s.items.length);
   const projectName = useEditorStore((s) => s.projectName);
   const setProjectName = useEditorStore((s) => s.setProjectName);
@@ -37,6 +43,21 @@ export default function Toolbar({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const replaceFileRef = useRef<HTMLInputElement>(null);
+
+  const onReplacePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !selectedId) return;
+    try {
+      const loaded = await loadImageFile(file);
+      replaceImage(selectedId, loaded);
+    } catch (err) {
+      setImportFailures([
+        { name: file.name, reason: err instanceof Error ? err.message : 'Could not load this image.' },
+      ]);
+    }
+  };
 
   // Closes the overflow menu on an outside tap/click or Escape — the same
   // dismissal surface a mobile user expects from any dropdown.
@@ -88,6 +109,16 @@ export default function Toolbar({
           <span className="btn-icon" aria-hidden>＋</span>
           <span className="btn-label">Add photos</span>
         </button>
+        <button
+          className="btn"
+          onClick={() => replaceFileRef.current?.click()}
+          disabled={!selectedIsImage}
+          title="Replace the selected photo with a different image"
+        >
+          <span className="btn-icon" aria-hidden>⇄</span>
+          <span className="btn-label">Replace photo</span>
+        </button>
+        <input ref={replaceFileRef} type="file" accept="image/*" hidden onChange={onReplacePhoto} />
         <button className="btn" onClick={onAddText} title="Add an editable text box to the canvas">
           <span className="btn-icon" aria-hidden>T</span>
           <span className="btn-label">Add text</span>

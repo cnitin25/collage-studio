@@ -71,6 +71,7 @@ interface EditorState {
   removeSelected: () => void;
   duplicateSelected: () => void;
   swapItems: (aId: string, bId: string) => void;
+  replaceImage: (id: string, image: LoadedImage) => void;
   setBackground: (patch: Partial<CanvasConfig>) => void;
   setBackgroundLive: (patch: Partial<CanvasConfig>) => void;
   copyStyle: () => void;
@@ -432,6 +433,30 @@ export const useEditorStore = create<EditorState>()(
       });
     },
 
+    replaceImage: (id, image) => {
+      const label = 'Replace image';
+      const current = get().items.find((i) => i.id === id);
+      if (!current || current.type !== 'image') return;
+      const removed = [structuredClone(current)]; // old state, for blob URL cleanup
+      const prev = snapshot(get());
+      set((s) => {
+        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
+        s.past.push(prev);
+        s.historyLabels.push(label);
+        s.future = [];
+        s.futureLabels = [];
+        const it = s.items.find((i) => i.id === id);
+        if (!it || it.type !== 'image') return;
+        it.src = image.src;
+        it.naturalWidth = image.naturalWidth;
+        it.naturalHeight = image.naturalHeight;
+        it.assetId = uid('asset');
+        it.crop = coverCrop(image.naturalWidth, image.naturalHeight, it.width, it.height);
+      });
+      const after = get();
+      revokeUnusedImageUrls(removed, [after.items, ...after.past.map((p) => p.items), ...after.future.map((p) => p.items)]);
+    },
+
     setBackground: (patch) => {
       const label = "Background";
       const prev = snapshot(get());
@@ -457,6 +482,8 @@ export const useEditorStore = create<EditorState>()(
         s.styleClipboard = {
           borderWidth: sel.borderWidth,
           borderColor: sel.borderColor,
+          borderStyle: sel.borderStyle,
+          borderGlyph: sel.borderGlyph,
           cornerRadius: sel.cornerRadius,
           shadow: sel.shadow,
           frame: sel.frame,
@@ -491,6 +518,8 @@ export const useEditorStore = create<EditorState>()(
       const style: ImageStyle = {
         borderWidth: sel.borderWidth,
         borderColor: sel.borderColor,
+        borderStyle: sel.borderStyle,
+        borderGlyph: sel.borderGlyph,
         cornerRadius: sel.cornerRadius,
         shadow: sel.shadow,
         frame: sel.frame,

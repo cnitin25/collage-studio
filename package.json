@@ -1,7 +1,7 @@
 {
   "name": "collage-studio",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.0",
   "type": "module",
   "description": "Offline photo collage editor — Phase 1 (canvas, drag/resize/rotate, export)",
   "scripts": {
