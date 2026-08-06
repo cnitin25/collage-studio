@@ -16,7 +16,8 @@ never leave your device.
   saturation/blur/warmth, one-click enhance presets (Brighten, Darken,
   Antique, Vivid, Warm, Auto) with an adjustable strength, grayscale/sepia,
   borders (solid/dashed/dotted/glyph) and frame presets, corner rounding,
-  and clip shapes (rectangle/circle/oval/heart).
+  clip shapes (rectangle/circle/oval/heart), and **replace photo** (swap in a
+  different image while keeping that item's position, size, crop, and style).
 - **Text & stickers** — editable text boxes with font/size/weight/color
   controls (including bundled calligraphy fonts), and an emoji sticker
   palette.
