@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import type Konva from 'konva';
 import { useEditorStore } from '../../store/useEditorStore';
-import type { TextItem } from '../../types';
+import { DEFAULT_LINE_HEIGHT, type TextItem } from '../../types';
 
 interface Props {
   hostRef: RefObject<HTMLDivElement>;
@@ -77,6 +77,7 @@ export default function TextEditOverlay({ hostRef, getStage }: Props) {
         fontFamily: item.fontFamily,
         fontWeight: item.fontStyle.includes('bold') ? 700 : 400,
         fontStyle: item.fontStyle.includes('italic') ? 'italic' : 'normal',
+        lineHeight: item.lineHeight ?? DEFAULT_LINE_HEIGHT,
         color: item.fill,
         textAlign: item.align,
         transform: `rotate(${node.getAbsoluteRotation()}deg)`,

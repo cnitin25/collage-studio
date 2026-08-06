@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Text as KonvaText } from 'react-konva';
 import type Konva from 'konva';
-import type { TextItem } from '../../types';
+import { DEFAULT_LINE_HEIGHT, type TextItem } from '../../types';
 
 interface Props {
   item: TextItem;
@@ -38,6 +38,7 @@ export default function TextNode({
       fontSize={item.fontSize}
       fontFamily={item.fontFamily}
       fontStyle={item.fontStyle}
+      lineHeight={item.lineHeight ?? DEFAULT_LINE_HEIGHT}
       fill={item.fill}
       align={item.align}
       rotation={item.rotation}

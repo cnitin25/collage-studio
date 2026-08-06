@@ -90,7 +90,13 @@ export interface TextItem extends BaseItem {
   fontStyle: string; // 'normal' | 'bold' | 'italic' | 'italic bold'
   fill: string;
   align: 'left' | 'center' | 'right';
+  /** multiple of fontSize between baselines. Default (1.4, see DEFAULT_LINE_HEIGHT)
+   * leaves room for scripts with tall matras/ascenders (e.g. Devanagari) so
+   * adjacent lines don't visually touch — Konva's own default of 1 is too tight. */
+  lineHeight?: number;
 }
+
+export const DEFAULT_LINE_HEIGHT = 1.4;
 
 export interface StickerItem extends BaseItem {
   type: 'sticker';

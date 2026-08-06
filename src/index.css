@@ -683,7 +683,6 @@ button {
   background: transparent;
   overflow: hidden;
   resize: none;
-  line-height: 1;
   white-space: pre-wrap;
   z-index: 20;
   caret-color: var(--accent);
