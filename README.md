@@ -20,7 +20,8 @@ never leave your device.
   different image while keeping that item's position, size, crop, and style).
   A photo keeps its crop zoom and framing when it's resized, swapped, or
   reflowed by a layout/spacing change — and is cropped, never stretched, to a
-  new shape.
+  new shape. Dragging a crop follows the pointer on flipped and rotated
+  photos too, and the 90° rotate buttons turn an item about its centre.
 - **Text & stickers** — editable text boxes with font/size/weight/color
   controls (including bundled calligraphy fonts), and an emoji sticker
   palette.
@@ -52,9 +53,12 @@ never leave your device.
 - **Responsive layout** — on narrow/touch viewports the inspector becomes a
   slide-over drawer and secondary toolbar actions collapse into an overflow
   menu; desktop keeps the fixed side panel.
-- **Histogram** — live R/G/B value distribution for the selected photo,
-  reflecting current crop/filter edits.
-- **Undo/redo, keyboard shortcuts, dark/light theme.**
+- **Histogram** — live R/G/B value distribution for the whole selected
+  photo, reflecting current crop/filter edits.
+- **Zoom & pan** — Ctrl+scroll or two-finger pinch zooms about the point
+  under the cursor/fingers; Space+drag pans.
+- **Undo/redo, keyboard shortcuts, dark/light theme.** A colour picker
+  session, a slider drag, or a text-box edit is one undo step each.
 
 ## Who it's for
 
@@ -122,6 +126,10 @@ e2e/                        standalone Playwright project (its own
                              root drives it
   tests/
     mobile.spec.ts           responsive drawer, overflow menu, pinch-zoom
+                             (incl. zooming about the fingers)
+    canvas.spec.ts           histogram, wheel zoom, text alignment, rotation,
+                             crop dragging, colour-picker undo, photo memory
+                             release, clean auto-save previews
     storage.spec.ts          save failures, storage cleanup, unsaved-changes
                              prompts, portable file round trip
     editing.spec.ts          crop kept on resize/reflow, Insert-panel text box

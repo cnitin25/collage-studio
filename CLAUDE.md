@@ -29,10 +29,13 @@ specific to working here with Claude Code, or worth calling out twice.
   (`reuseExistingServer`). If another project's dev server holds that port,
   every test runs against the wrong app and fails with "element not found" —
   check the port before debugging the tests.
-- `AGENTS.md`'s **Storage** and **State And History** sections record rules
-  the save/crop/export code depends on (storage lock, immutable assets,
+- `AGENTS.md`'s **Storage**, **State And History** and **Canvas And Export**
+  sections record rules the code depends on (storage lock, immutable assets,
   `refitCrop` over `coverCrop`, reference-based unsaved-changes tracking,
-  blur radius in cache pixels). Read them before changing those areas.
+  blur radius in cache pixels, the single blob-URL release subscription,
+  `ColorInput` for colour pickers, `itemSize` for drawn sizes, `UI_OVERLAY`
+  for editor-only visuals, stage-relative zoom maths). Read them before
+  changing those areas.
 
 - This app has **two responsive layouts** sharing the same components:
   desktop (fixed inspector, full toolbar) and mobile/touch (inspector becomes

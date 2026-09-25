@@ -26,8 +26,13 @@ export default function Histogram({ item }: { item: ImageItem }) {
     const node = getImageNode(item.id);
     if (node) {
       try {
-        const aspect = item.height / item.width;
-        const canvas = node.toCanvas({ width: THUMB, height: Math.max(1, Math.round(THUMB * aspect)) });
+        // In Konva's toCanvas, width/height CROP the capture region (in
+        // on-screen pixels), they don't scale it — passing THUMB there read
+        // only the photo's top-left corner. Capture the whole node and shrink
+        // it with pixelRatio instead.
+        const rect = node.getClientRect();
+        const pixelRatio = Math.min(1, THUMB / Math.max(1, rect.width, rect.height));
+        const canvas = node.toCanvas({ pixelRatio });
         setData(histogramFromCanvas(canvas));
         return;
       } catch {

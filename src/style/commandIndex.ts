@@ -49,7 +49,7 @@ export const PANEL_COMMANDS: PanelCommand[] = [
       'rotate',
       'flip',
       'opacity',
-      'replace photo',
+      // Not 'replace photo' — that's a toolbar button, not in this panel.
       'bring to front',
       'send to back',
     ],
@@ -106,7 +106,9 @@ export const PANEL_COMMANDS: PanelCommand[] = [
   {
     label: 'Settings',
     panel: 'Settings',
-    keywords: ['snap', 'swap mode', 'lock aspect', 'auto save'],
+    // Not 'auto save' — that toggle lives in the Projects dialog, which a
+    // panel command can't open.
+    keywords: ['snap', 'swap mode', 'lock aspect', 'stay in crop mode', 'lock layout'],
   },
   {
     label: 'Export settings',

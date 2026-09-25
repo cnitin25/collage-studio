@@ -17,6 +17,8 @@ import Background from './Background';
 import { drawShapePath } from '../../utils/shapes';
 import type { CollageItem } from '../../types';
 import { computeSnap, collectSnapTargets, nearestSnapTarget, type Box, type Guide } from '../../utils/snap';
+import { itemSize } from '../../utils/itemBox';
+import { UI_OVERLAY } from './overlay';
 
 export interface CanvasHandle {
   getStage: () => Konva.Stage | null;
@@ -46,9 +48,7 @@ const ALL_ANCHORS = [
 const TEXT_ANCHORS = ['middle-left', 'middle-right'];
 
 function itemBox(it: CollageItem): Box {
-  if (it.type === 'sticker') return { x: it.x, y: it.y, width: it.fontSize, height: it.fontSize };
-  if (it.type === 'text') return { x: it.x, y: it.y, width: it.width, height: it.fontSize * 1.3 };
-  return { x: it.x, y: it.y, width: it.width, height: it.height };
+  return { x: it.x, y: it.y, ...itemSize(it) };
 }
 
 const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
@@ -141,6 +141,14 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
         n.blurRadius((savedBlur[i] / Konva.pixelRatio) * exportRatio);
         n.cache({ pixelRatio: exportRatio });
       });
+
+      // Editor-only visuals must never reach the file. Export and Save
+      // deselect first, but auto-save runs on a timer and captures whatever
+      // is on screen — selection handles, guides, a crop outline.
+      const overlays = [trRef.current, ...stage.find(`.${UI_OVERLAY}`)].filter(
+        (n): n is Konva.Node => !!n && n.visible(),
+      );
+      overlays.forEach((n) => n.visible(false));
       stage.batchDraw();
 
       let uri: string | null = null;
@@ -164,6 +172,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
           uri = stage.toDataURL({ mimeType, quality, pixelRatio });
         }
       } finally {
+        overlays.forEach((n) => n.visible(true));
         recache.forEach((n, i) => {
           n.blurRadius(savedBlur[i]);
           n.cache();
@@ -213,9 +222,17 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
       if (!pointer) return;
       const factor = e.deltaY < 0 ? 1.1 : 0.9;
       const newScale = Math.max(0.1, Math.min(8, viewScale * factor));
+      // Canvas point under the cursor, then the view offset that puts that
+      // same point back under the cursor at the new scale. (Solving for
+      // `mouseX - mouseX * newScale` instead only held from the neutral view —
+      // once zoomed, zooming again anywhere else made the content jump.)
       const mouseX = (pointer.x / display.scale - viewX) / viewScale;
       const mouseY = (pointer.y / display.scale - viewY) / viewScale;
-      setView(newScale, mouseX - mouseX * newScale, mouseY - mouseY * newScale);
+      setView(
+        newScale,
+        pointer.x / display.scale - mouseX * newScale,
+        pointer.y / display.scale - mouseY * newScale,
+      );
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
@@ -237,8 +254,12 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     startViewY: number;
   } | null>(null);
 
+  // Relative to the STAGE, not the wrapper: the stage sits centred inside the
+  // padded .canvas-area, and the pinch maths (like the wheel zoom's
+  // getPointerPosition) works in stage coordinates. Measuring from the wrapper
+  // anchored every pinch on a point offset from the user's fingers.
   const touchPoint = (t: Touch) => {
-    const rect = wrapRef.current?.getBoundingClientRect();
+    const rect = stageRef.current?.container().getBoundingClientRect();
     return { x: t.clientX - (rect?.left ?? 0), y: t.clientY - (rect?.top ?? 0) };
   };
 
@@ -288,9 +309,13 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
       const newScale = Math.max(0.1, Math.min(8, g.startScale * ratio));
       const contentX = (g.startCx / display.scale - g.startViewX) / g.startScale;
       const contentY = (g.startCy / display.scale - g.startViewY) / g.startScale;
-      const panDX = (cx - g.startCx) / display.scale;
-      const panDY = (cy - g.startCy) / display.scale;
-      setView(newScale, contentX - contentX * newScale + panDX, contentY - contentY * newScale + panDY);
+      // Keep the content point that was under the fingers' starting midpoint
+      // under their CURRENT midpoint (same correction as the wheel zoom).
+      setView(
+        newScale,
+        cx / display.scale - contentX * newScale,
+        cy / display.scale - contentY * newScale,
+      );
       return;
     }
     if (!isPanning.current || !panStart.current) return;
@@ -509,6 +534,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                 stroke="#ff7a59"
                 strokeWidth={1 / scale}
                 listening={false}
+                name={UI_OVERLAY}
               />
             ) : (
               <Line
@@ -517,6 +543,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                 stroke="#ff7a59"
                 strokeWidth={1 / scale}
                 listening={false}
+                name={UI_OVERLAY}
               />
             ),
           )}

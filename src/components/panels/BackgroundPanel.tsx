@@ -5,6 +5,7 @@ import { extractPalette } from '../../utils/palette';
 import { loadImageFile } from '../../utils/loadImage';
 import { uid } from '../../utils/id';
 import Slider from '../ui/Slider';
+import ColorInput from '../ui/ColorInput';
 import CollapsiblePanel from './CollapsiblePanel';
 
 const TYPES: { id: BackgroundType; label: string }[] = [
@@ -19,17 +20,19 @@ const PATTERNS: PatternKind[] = ['dots', 'grid', 'stripes', 'checker'];
 
 function ColorField({
   label,
+  historyLabel,
   value,
-  onChange,
+  onLive,
 }: {
   label: string;
+  historyLabel: string;
   value: string;
-  onChange: (c: string) => void;
+  onLive: (c: string) => void;
 }) {
   return (
     <label className="color-field">
       <span>{label}</span>
-      <input type="color" value={value} onChange={(e) => onChange(e.target.value)} />
+      <ColorInput value={value} label={historyLabel} onLive={onLive} />
     </label>
   );
 }
@@ -122,10 +125,10 @@ export default function BackgroundPanel() {
             />
           ))}
           <label className="swatch swatch-custom" title="Custom color">
-            <input
-              type="color"
+            <ColorInput
               value={canvas.backgroundColor}
-              onChange={(e) => setBackground({ backgroundType: 'color', backgroundColor: e.target.value })}
+              label="Background color"
+              onLive={(c) => setBackgroundLive({ backgroundType: 'color', backgroundColor: c })}
             />
           </label>
         </div>
@@ -134,8 +137,8 @@ export default function BackgroundPanel() {
       {type === 'gradient' && (
         <div style={{ marginTop: 14 }}>
           <div className="color-row">
-            <ColorField label="From" value={canvas.gradientFrom ?? '#ffffff'} onChange={(c) => setBackground({ gradientFrom: c })} />
-            <ColorField label="To" value={canvas.gradientTo ?? '#000000'} onChange={(c) => setBackground({ gradientTo: c })} />
+            <ColorField label="From" historyLabel="Gradient color" value={canvas.gradientFrom ?? '#ffffff'} onLive={(c) => setBackgroundLive({ gradientFrom: c })} />
+            <ColorField label="To" historyLabel="Gradient color" value={canvas.gradientTo ?? '#000000'} onLive={(c) => setBackgroundLive({ gradientTo: c })} />
           </div>
           <div className="sliders" style={{ marginTop: 12 }}>
             <Slider
@@ -208,8 +211,8 @@ export default function BackgroundPanel() {
             ))}
           </div>
           <div className="color-row" style={{ marginTop: 12 }}>
-            <ColorField label="Color" value={canvas.patternColor ?? '#000000'} onChange={(c) => setBackground({ patternColor: c })} />
-            <ColorField label="Base" value={canvas.patternBg ?? '#ffffff'} onChange={(c) => setBackground({ patternBg: c })} />
+            <ColorField label="Color" historyLabel="Pattern color" value={canvas.patternColor ?? '#000000'} onLive={(c) => setBackgroundLive({ patternColor: c })} />
+            <ColorField label="Base" historyLabel="Pattern color" value={canvas.patternBg ?? '#ffffff'} onLive={(c) => setBackgroundLive({ patternBg: c })} />
           </div>
           <div className="sliders" style={{ marginTop: 12 }}>
             <Slider

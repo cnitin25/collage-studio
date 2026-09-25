@@ -1,6 +1,7 @@
 import { useEditorStore } from '../../store/useEditorStore';
 import CollapsiblePanel from './CollapsiblePanel';
 import Slider from '../ui/Slider';
+import ColorInput from '../ui/ColorInput';
 
 const BORDER_COLORS = ['#ffffff', '#15171d', '#ff7a59', '#3b6ef5', '#2dba78', '#f5d04e'];
 
@@ -51,10 +52,10 @@ export default function FramePanel() {
           />
         ))}
         <label className="swatch swatch-custom" title="Custom border color">
-          <input
-            type="color"
+          <ColorInput
             value={canvas.frameBorderColor ?? '#ffffff'}
-            onChange={(e) => setBackground({ frameBorderColor: e.target.value })}
+            label="Collage border color"
+            onLive={(c) => setBackgroundLive({ frameBorderColor: c })}
           />
         </label>
       </div>

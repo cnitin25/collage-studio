@@ -7,6 +7,7 @@ import type { ImageItem } from '../../types';
 import { refitCrop } from '../../utils/cover';
 import { drawShapePath } from '../../utils/shapes';
 import { registerImageNode } from '../../utils/imageNodeRegistry';
+import { UI_OVERLAY } from './overlay';
 
 interface Props {
   item: ImageItem;
@@ -121,10 +122,13 @@ export default function ImageNode({
 
   // Expose the rendered node so sidebar panels (e.g. the histogram) can read
   // its current filtered/cropped pixels, not just the original source file.
+  // Registered only once the image has loaded: before that the node draws
+  // nothing, and a histogram read from it came back empty and stayed empty.
+  // Unregistered, the histogram falls back to reading the source file.
   useEffect(() => {
-    registerImageNode(item.id, imgRef.current);
+    registerImageNode(item.id, image ? imgRef.current : null);
     return () => registerImageNode(item.id, null);
-  }, [item.id]);
+  }, [item.id, image]);
 
   // (Re)cache the image so Konva filters have a base to work on. Clear when none.
   useEffect(() => {
@@ -150,10 +154,18 @@ export default function ImageNode({
   );
   const lockedAbs = useRef<{ x: number; y: number } | null>(null);
 
+  // Where the pointer went DOWN. Konva fires dragstart on the first move, so
+  // measuring from the dragstart position dropped that first step and left
+  // the photo trailing the pointer for the rest of the drag.
+  const pressPoint = useRef<{ x: number; y: number } | null>(null);
+  const handlePress = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    pressPoint.current = e.target.getStage()?.getPointerPosition() ?? null;
+  };
+
   const handlePanStart = (e: KonvaEventObject<DragEvent>) => {
     if (!item.crop) return;
     const stage = e.target.getStage();
-    const p = stage?.getPointerPosition();
+    const p = pressPoint.current ?? stage?.getPointerPosition();
     if (!p) return;
     lockedAbs.current = e.target.getAbsolutePosition();
     panStart.current = { px: p.x, py: p.y, crop: { ...item.crop } };
@@ -165,8 +177,17 @@ export default function ImageNode({
     const p = stage?.getPointerPosition();
     if (!stage || !p || !panStart.current) return;
     const scale = stage.scaleX() || 1;
-    const dx = (p.x - panStart.current.px) / scale;
-    const dy = (p.y - panStart.current.py) / scale;
+    const sdx = (p.x - panStart.current.px) / scale;
+    const sdy = (p.y - panStart.current.py) / scale;
+    // Pointer movement is in canvas axes; the crop lives in the photo's own
+    // axes. Undo the item's rotation, then its flips, so the photo follows the
+    // pointer — otherwise a flipped photo moved against the drag, and a
+    // rotated one moved along the wrong axis.
+    const r = (-item.rotation * Math.PI) / 180;
+    let dx = sdx * Math.cos(r) - sdy * Math.sin(r);
+    let dy = sdx * Math.sin(r) + sdy * Math.cos(r);
+    if (item.flipX) dx = -dx;
+    if (item.flipY) dy = -dy;
     const c = panStart.current.crop;
     const fx = c.width / item.width;
     const fy = c.height / item.height;
@@ -177,6 +198,7 @@ export default function ImageNode({
 
   const handlePanEnd = () => {
     panStart.current = null;
+    pressPoint.current = null;
     lockedAbs.current = null;
     onCropPanEnd();
   };
@@ -276,6 +298,8 @@ export default function ImageNode({
           dragBoundFunc={() =>
             lockedAbs.current ?? imgRef.current?.getAbsolutePosition() ?? { x: 0, y: 0 }
           }
+          onMouseDown={handlePress}
+          onTouchStart={handlePress}
           onDragStart={handlePanStart}
           onDragMove={handlePanMove}
           onDragEnd={handlePanEnd}
@@ -326,6 +350,7 @@ export default function ImageNode({
           strokeWidth={2}
           dash={[6, 4]}
           listening={false}
+          name={UI_OVERLAY}
         />
       )}
 
@@ -341,6 +366,7 @@ export default function ImageNode({
           stroke="#ff7a59"
           strokeWidth={3}
           listening={false}
+          name={UI_OVERLAY}
         />
       )}
     </Group>

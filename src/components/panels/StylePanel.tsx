@@ -2,6 +2,7 @@ import { useEditorStore } from '../../store/useEditorStore';
 import { FRAMES } from '../../style/frames';
 import { extractPalette } from '../../utils/palette';
 import Slider from '../ui/Slider';
+import ColorInput from '../ui/ColorInput';
 import CollapsiblePanel from './CollapsiblePanel';
 
 const BORDER_COLORS = ['#ffffff', '#15171d', '#ff7a59', '#3b6ef5', '#2dba78', '#f5d04e'];
@@ -133,10 +134,10 @@ export default function StylePanel() {
           />
         ))}
         <label className="swatch swatch-custom" title="Custom border color">
-          <input
-            type="color"
+          <ColorInput
             value={sel.borderColor ?? '#ffffff'}
-            onChange={(e) => updateItem(sel.id, { borderColor: e.target.value })}
+            label="Border color"
+            onLive={(c) => updateItemLive(sel.id, { borderColor: c })}
           />
         </label>
       </div>

@@ -15,11 +15,11 @@ import type { ImageLoadFailure } from '../utils/loadImage';
 import type { LayoutSpec, SpacingOptions } from '../layout/types';
 import { computeLayout } from '../layout/strategies';
 import { coverCrop, refitCrop } from '../utils/cover';
+import { itemSize } from '../utils/itemBox';
 import { FRAMES, type FrameId } from '../style/frames';
 import { ENHANCE_PRESETS, DEFAULT_PRESET_STRENGTH, NEUTRAL_FILTERS, scaleEnhanceFilters } from '../style/enhancePresets';
 import type { SerializedState } from '../storage/projects';
 import { uid } from '../utils/id';
-import { revokeUnusedImageUrls } from '../utils/blobUrls';
 import { shuffle } from '../utils/random';
 
 interface Snapshot {
@@ -433,7 +433,6 @@ export const useEditorStore = create<EditorState>()(
       const { selectedId } = get();
       if (!selectedId) return;
       const prev = snapshot(get());
-      const removed = get().items.filter((it) => it.id === selectedId);
       set((s) => {
         if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
         s.past.push(prev);
@@ -445,8 +444,6 @@ export const useEditorStore = create<EditorState>()(
         s.croppingId = null;
         s.editingId = null;
       });
-      const after = get();
-      revokeUnusedImageUrls(removed, [after.items, ...after.past.map((p) => p.items), ...after.future.map((p) => p.items)]);
     },
 
     duplicateSelected: () => {
@@ -506,7 +503,6 @@ export const useEditorStore = create<EditorState>()(
       const label = 'Replace image';
       const current = get().items.find((i) => i.id === id);
       if (!current || current.type !== 'image') return;
-      const removed = [structuredClone(current)]; // old state, for blob URL cleanup
       const prev = snapshot(get());
       set((s) => {
         if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
@@ -522,8 +518,6 @@ export const useEditorStore = create<EditorState>()(
         it.assetId = uid('asset');
         it.crop = coverCrop(image.naturalWidth, image.naturalHeight, it.width, it.height);
       });
-      const after = get();
-      revokeUnusedImageUrls(removed, [after.items, ...after.past.map((p) => p.items), ...after.future.map((p) => p.items)]);
     },
 
     setBackground: (patch) => {
@@ -628,7 +622,6 @@ export const useEditorStore = create<EditorState>()(
       const label = 'Clear all';
       if (get().items.length === 0) return;
       const prev = snapshot(get());
-      const removed = get().items;
       set((s) => {
         if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
         s.past.push(prev);
@@ -641,8 +634,6 @@ export const useEditorStore = create<EditorState>()(
         s.editingId = null;
         s.lastLayout = null;
       });
-      const after = get();
-      revokeUnusedImageUrls(removed, [after.items, ...after.past.map((p) => p.items), ...after.future.map((p) => p.items)]);
     },
 
     applyLayout: (spec) => {
@@ -1027,7 +1018,6 @@ export const useEditorStore = create<EditorState>()(
     // every blob: URL still held by the outgoing items is now unreachable —
     // safe to revoke unconditionally against the freshly loaded items.
     loadSerializedState: (state, id, name) => {
-      const removed = get().items;
       set((s) => {
         s.canvas = state.canvas;
         s.items = state.items;
@@ -1045,11 +1035,9 @@ export const useEditorStore = create<EditorState>()(
         renameProjectDraft(s, name);
       });
       set({ savedRef: savedRefOf(get()) });
-      revokeUnusedImageUrls(removed, [get().items]);
     },
 
     resetProject: () => {
-      const removed = get().items;
       set((s) => {
         s.canvas = { ...DEFAULT_CANVAS };
         s.items = [];
@@ -1067,7 +1055,6 @@ export const useEditorStore = create<EditorState>()(
         renameProjectDraft(s, DEFAULT_PROJECT_NAME);
       });
       set({ savedRef: savedRefOf(get()) });
-      revokeUnusedImageUrls(removed, [get().items]);
     },
 
     markSaved: (ref) => set({ savedRef: ref }),
@@ -1150,7 +1137,22 @@ export const useEditorStore = create<EditorState>()(
         s.futureLabels = [];
         const it = s.items.find((i) => i.id === id);
         if (!it) return;
-        it.rotation = ((it.rotation + deltaDeg) % 360 + 360) % 360;
+        // Items pivot on their top-left corner (x, y) — Konva's default with no
+        // offset. Rotating in place means turning about the CENTRE instead, so
+        // move (x, y) to where the corner lands after rotating about it.
+        const { width: w, height: h } = itemSize(it);
+        const rotate = (deg: number, px: number, py: number) => {
+          const r = (deg * Math.PI) / 180;
+          return { x: px * Math.cos(r) - py * Math.sin(r), y: px * Math.sin(r) + py * Math.cos(r) };
+        };
+        const toCentre = rotate(it.rotation, w / 2, h / 2);
+        const cx = it.x + toCentre.x;
+        const cy = it.y + toCentre.y;
+        const next = ((it.rotation + deltaDeg) % 360 + 360) % 360;
+        const toCentreAfter = rotate(next, w / 2, h / 2);
+        it.x = cx - toCentreAfter.x;
+        it.y = cy - toCentreAfter.y;
+        it.rotation = next;
       });
     },
 
@@ -1170,8 +1172,9 @@ export const useEditorStore = create<EditorState>()(
         s.futureLabels = [];
         const it = s.items.find((i) => i.id === selId);
         if (!it) return;
-        const iw = it.type === 'sticker' ? it.fontSize : it.width;
-        const ih = it.type === 'sticker' ? it.fontSize : it.type === 'text' ? it.fontSize * 1.3 : it.height;
+        // Real drawn size — a text box is as tall as all its wrapped lines, not
+        // one line (the old fontSize × 1.3 put multi-line text off-canvas).
+        const { width: iw, height: ih } = itemSize(it);
 
         // Items rotate around their top-left corner (item.x, item.y) — Konva's
         // default pivot when no offsetX/offsetY is set (see ImageNode/StickerNode/
@@ -1217,3 +1220,48 @@ export const useEditorStore = create<EditorState>()(
       }),
   })),
 );
+
+// ---- blob: URL lifetime -------------------------------------------------
+//
+// Every photo (and uploaded background) is an object URL, which pins its whole
+// file in memory until revoked. One URL can be shared — a duplicated item, a
+// photo reused as the background, an undo snapshot of a deleted item — so it
+// may only be revoked once NOTHING can show it again: not the canvas, not any
+// undo/redo step, not an in-progress gesture's snapshot.
+//
+// This used to be done ad hoc in five actions, which missed the common case:
+// history silently discarding snapshots (the 60-step limit shifting the oldest
+// off, or a new action clearing the redo branch). Those URLs leaked for the
+// rest of the session. Tracking it here, off the history itself, covers every
+// path at once.
+
+function collectBlobUrls(into: Set<string>, items: CollageItem[], canvas: CanvasConfig): void {
+  for (const it of items) if (it.type === 'image' && it.src.startsWith('blob:')) into.add(it.src);
+  if (canvas.backgroundImageSrc?.startsWith('blob:')) into.add(canvas.backgroundImageSrc);
+}
+
+const trackedBlobUrls = new Set<string>();
+
+useEditorStore.subscribe((s, prev) => {
+  // Cheap, every change: remember any URL that has appeared on the canvas.
+  if (s.items !== prev.items || s.canvas !== prev.canvas) collectBlobUrls(trackedBlobUrls, s.items, s.canvas);
+
+  // A URL can only become unreachable when a snapshot is dropped, which always
+  // changes past/future (or ends a gesture). Only then pay for the full scan.
+  const historyChanged =
+    s.past !== prev.past || s.future !== prev.future || (prev._pending !== null && s._pending === null);
+  if (!historyChanged) return;
+
+  const reachable = new Set<string>();
+  collectBlobUrls(reachable, s.items, s.canvas);
+  for (const snap of s.past) collectBlobUrls(reachable, snap.items, snap.canvas);
+  for (const snap of s.future) collectBlobUrls(reachable, snap.items, snap.canvas);
+  if (s._pending) collectBlobUrls(reachable, s._pending.snap.items, s._pending.snap.canvas);
+
+  for (const url of trackedBlobUrls) {
+    if (!reachable.has(url)) {
+      URL.revokeObjectURL(url);
+      trackedBlobUrls.delete(url);
+    }
+  }
+});

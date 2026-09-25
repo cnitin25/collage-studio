@@ -176,3 +176,47 @@ test.describe('desktop layout (regression guard)', () => {
     expect(box.width).toBeCloseTo(280, 0);
   });
 });
+
+test.describe('pinch-zoom anchoring', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  /** Canvas coordinates of the content currently drawn under a page point. */
+  async function contentUnder(page: Page, p: { x: number; y: number }) {
+    const box = (await page.locator('.konvajs-content').boundingBox())!;
+    const { viewScale, viewX, viewY } = await getView(page);
+    const canvasWidth = await page.evaluate(
+      () => (window as any).__editorStore.getState().canvas.width as number,
+    );
+    const s = box.width / canvasWidth; // display scale
+    return { x: ((p.x - box.x) / s - viewX) / viewScale, y: ((p.y - box.y) / s - viewY) / viewScale };
+  }
+
+  test('the point between the fingers stays put, including on a second pinch elsewhere', async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => {
+      const s = (window as any).__editorStore.getState();
+      s.addText();
+      s.stopEditingText();
+      s.select(null);
+    });
+    const box = (await page.locator('.konvajs-content').boundingBox())!;
+    const A = { x: box.x + box.width * 0.4, y: box.y + box.height * 0.4 };
+    const B = { x: box.x + box.width * 0.6, y: box.y + box.height * 0.65 };
+
+    // First pinch, from the neutral view: anchored on the fingers (it used to
+    // anchor on a point offset by the stage's position inside its wrapper).
+    const aBefore = await contentUnder(page, A);
+    await pinch(page, A, { startSpread: 30, endSpread: 80 });
+    expect((await getView(page)).viewScale).toBeGreaterThan(1.5);
+    const aAfter = await contentUnder(page, A);
+    expect(Math.abs(aAfter.x - aBefore.x)).toBeLessThan(3);
+    expect(Math.abs(aAfter.y - aBefore.y)).toBeLessThan(3);
+
+    // Second pinch somewhere else, from an already-zoomed view.
+    const bBefore = await contentUnder(page, B);
+    await pinch(page, B, { startSpread: 30, endSpread: 60 });
+    const bAfter = await contentUnder(page, B);
+    expect(Math.abs(bAfter.x - bBefore.x)).toBeLessThan(3);
+    expect(Math.abs(bAfter.y - bBefore.y)).toBeLessThan(3);
+  });
+});

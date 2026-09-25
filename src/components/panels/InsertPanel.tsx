@@ -3,6 +3,7 @@ import { useEditorStore } from '../../store/useEditorStore';
 import CollapsiblePanel from './CollapsiblePanel';
 import type { TextAlign } from '../../types';
 import Slider from '../ui/Slider';
+import ColorInput from '../ui/ColorInput';
 
 const STICKERS = [
   '⭐', '❤️', '✨', '🎉', '🌟', '🔥', '😍', '😎',
@@ -172,10 +173,10 @@ export default function InsertPanel() {
               />
             ))}
             <label className="swatch swatch-custom" title="Custom color">
-              <input
-                type="color"
+              <ColorInput
                 value={selText.fill}
-                onChange={(e) => updateItem(selText.id, { fill: e.target.value })}
+                label="Text color"
+                onLive={(c) => updateItemLive(selText.id, { fill: c })}
               />
             </label>
           </div>
