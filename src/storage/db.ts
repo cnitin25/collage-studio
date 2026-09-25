@@ -22,6 +22,18 @@ export async function putAsset(id: string, blob: Blob): Promise<void> {
   await (await db()).put('assets', { id, blob });
 }
 
+export async function hasAsset(id: string): Promise<boolean> {
+  return (await (await db()).getKey('assets', id)) !== undefined;
+}
+
+export async function getAllAssetKeys(): Promise<string[]> {
+  return (await (await db()).getAllKeys('assets')) as string[];
+}
+
+export async function deleteAsset(id: string): Promise<void> {
+  await (await db()).delete('assets', id);
+}
+
 export async function getAssetBlob(id: string): Promise<Blob | undefined> {
   const rec = (await (await db()).get('assets', id)) as { blob: Blob } | undefined;
   return rec?.blob;

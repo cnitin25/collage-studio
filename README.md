@@ -18,6 +18,9 @@ never leave your device.
   borders (solid/dashed/dotted/glyph) and frame presets, corner rounding,
   clip shapes (rectangle/circle/oval/heart), and **replace photo** (swap in a
   different image while keeping that item's position, size, crop, and style).
+  A photo keeps its crop zoom and framing when it's resized, swapped, or
+  reflowed by a layout/spacing change — and is cropped, never stretched, to a
+  new shape.
 - **Text & stickers** — editable text boxes with font/size/weight/color
   controls (including bundled calligraphy fonts), and an emoji sticker
   palette.
@@ -29,10 +32,21 @@ never leave your device.
   landscape, wide) and print presets (4×6, 5×7, 8×10, A4 at 300 DPI), or a
   custom pixel size.
 - **Projects** — save/open/delete projects in the browser (IndexedDB),
-  each with a thumbnail; optional auto-save every 30s. A project can also be
-  exported to/imported from a single portable `.json` file (photos embedded)
-  for backup or moving to another browser/device.
-- **Export** — PNG or JPEG, at 1×/2×/3× the canvas resolution.
+  each with a thumbnail; optional auto-save every 30s (only when something
+  changed). A project can also be exported to/imported from a single portable
+  `.json` file (photos and background image embedded) for backup or moving to
+  another browser/device.
+  - Opening another project, starting a new one, importing, or closing the tab
+    asks first if there are unsaved changes; deleting a project always asks.
+  - A save that fails (e.g. the browser's storage for the site is full) says
+    so — it is never reported as "Saved" with photos missing.
+  - Stored photos no saved project uses any more (deleted projects, replaced
+    photos) are cleaned up automatically, so storage doesn't only ever grow.
+- **Export** — PNG or JPEG, at 1×/2×/3× the canvas resolution, with filtered
+  photos rendered at full export resolution. JPEG has no transparency, so
+  areas outside a rounded collage frame come out white. The file name
+  defaults to the project name (new projects are called "Collage") and
+  follows it as you rename the project, until you type a file name of your own.
 - **Offline install (PWA)** — the built app installs and runs with no
   network connection.
 - **Responsive layout** — on narrow/touch viewports the inspector becomes a
@@ -63,6 +77,10 @@ npm run preview   # serve the build locally (offline/PWA install only works here
 cd e2e && npm install   # first time only
 npm run test:e2e        # Playwright e2e suite (spins up the dev server itself)
 ```
+
+The suite reuses anything already listening on port 5173 — if another app's
+dev server is running there, every test runs against *that* app and fails.
+Stop it first.
 
 To use it from another device on the same network (e.g. a phone), run
 `npm run dev:lan` (development) or `npm run build && npm run preview:lan`
@@ -102,6 +120,14 @@ src/
 e2e/                        standalone Playwright project (its own
                              package.json); `npm run test:e2e` at the repo
                              root drives it
+  tests/
+    mobile.spec.ts           responsive drawer, overflow menu, pinch-zoom
+    storage.spec.ts          save failures, storage cleanup, unsaved-changes
+                             prompts, portable file round trip
+    editing.spec.ts          crop kept on resize/reflow, Insert-panel text box
+    export.spec.ts           export sharpness, blur at 1x vs 3x, JPEG corners
+    export-filename.spec.ts  export file name following the project name
+    helpers.ts               store access, generated test images, image metrics
 ```
 
 ## Known limitations
@@ -109,9 +135,10 @@ e2e/                        standalone Playwright project (its own
 - Single-user, single-browser: projects saved via IndexedDB stay on that
   device/browser and aren't synced elsewhere (use the portable `.json`
   export to move a project to another device or browser).
-- A small Playwright suite (`e2e/`) covers the mobile responsive layout
-  (drawer, overflow menu, pinch-zoom); most other verification is manual
-  plus TypeScript's compiler checks (`npm run build`).
+- The Playwright suite (`e2e/`) covers the mobile responsive layout,
+  project storage, cropping, the Insert panel, and export output; the rest
+  of the editor is verified manually plus TypeScript's compiler checks
+  (`npm run build`).
 - Konva is split into its own vendor chunk (`vite.config.ts`) so app-code
   updates don't force a re-download of it, but it still loads on first
   visit since the canvas is needed immediately — there's no further win

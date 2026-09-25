@@ -8,11 +8,40 @@ import ProjectsModal from './components/ProjectsModal';
 import ThumbnailStrip from './components/ThumbnailStrip';
 import StatusBar from './components/StatusBar';
 import ImportWarningBanner from './components/ImportWarningBanner';
-import { useEditorStore } from './store/useEditorStore';
+import {
+  useEditorStore,
+  DEFAULT_PROJECT_NAME,
+  fileNameForProject,
+  hasUnsavedChanges,
+  savedRefOf,
+} from './store/useEditorStore';
 import { useThemeStore } from './store/useThemeStore';
 import { loadImageFiles } from './utils/loadImage';
 import { downloadDataURL } from './utils/exportStage';
 import { saveProject } from './storage/projects';
+
+function describeSaveError(err: unknown): string {
+  if (err instanceof DOMException && err.name === 'QuotaExceededError') {
+    return "the browser's storage for this site is full. Delete old projects, or use Projects → Export file to keep a copy.";
+  }
+  return err instanceof Error && err.message ? err.message : 'an unknown storage error.';
+}
+
+/** Save the editor's current state; marks it saved only once it's safely stored. */
+async function saveCurrent(thumbnail: string | undefined) {
+  const st = useEditorStore.getState();
+  // Captured before the (async) save, so edits made while it runs still count
+  // as unsaved afterwards.
+  const ref = savedRefOf(st);
+  const result = await saveProject({
+    id: st.currentProjectId,
+    name: st.projectName.trim() || DEFAULT_PROJECT_NAME,
+    state: { canvas: st.canvas, items: st.items, spacing: st.spacing, lastLayout: st.lastLayout },
+    thumbnail,
+  });
+  if (result.missingPhotos === 0) useEditorStore.getState().markSaved(ref);
+  return result;
+}
 
 export default function App() {
   const canvasRef = useRef<CanvasHandle>(null);
@@ -30,7 +59,14 @@ export default function App() {
   const duplicateSelected = useEditorStore((s) => s.duplicateSelected);
 
   const [projectsOpen, setProjectsOpen] = useState(false);
-  const [savedToast, setSavedToast] = useState(false);
+  const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
+  const toastTimer = useRef<number>();
+  const showToast = useCallback((text: string, error = false) => {
+    window.clearTimeout(toastTimer.current);
+    setToast({ text, error });
+    // Errors stay up long enough to actually read.
+    toastTimer.current = window.setTimeout(() => setToast(null), error ? 8000 : 1800);
+  }, []);
   const [toolsOpen, setToolsOpen] = useState(false);
   // Desktop-only: collapses the always-visible sidebar to reclaim canvas
   // width. Distinct from toolsOpen, which drives the mobile slide-in drawer.
@@ -45,7 +81,7 @@ export default function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       const st = useEditorStore.getState();
-      if (!st.autoSaveEnabled || st.items.length === 0) return;
+      if (!st.autoSaveEnabled || !hasUnsavedChanges(st)) return;
       const handle = canvasRef.current;
       let thumbnail: string | undefined;
       try {
@@ -58,14 +94,22 @@ export default function App() {
       } catch {
         thumbnail = undefined;
       }
-      saveProject({
-        id: st.currentProjectId,
-        name: st.projectName.trim() || 'Untitled',
-        state: { canvas: st.canvas, items: st.items, spacing: st.spacing, lastLayout: st.lastLayout },
-        thumbnail,
-      }).catch(() => {});
+      // A background save that fails must still say so — silently dropping it
+      // is how a full disk goes unnoticed until the project won't reopen.
+      saveCurrent(thumbnail).catch((err) => showToast(`Auto-save failed: ${describeSaveError(err)}`, true));
     }, 30_000);
     return () => window.clearInterval(timer);
+  }, [showToast]);
+
+  // Closing the tab with unsaved work gets the browser's "Leave site?" prompt.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges(useEditorStore.getState())) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -86,15 +130,20 @@ export default function App() {
         thumbnail = undefined;
       }
     }
-    await saveProject({
-      id: st.currentProjectId,
-      name: st.projectName.trim() || 'Untitled',
-      state: { canvas: st.canvas, items: st.items, spacing: st.spacing, lastLayout: st.lastLayout },
-      thumbnail,
-    });
-    setSavedToast(true);
-    window.setTimeout(() => setSavedToast(false), 1800);
-  }, [select]);
+    try {
+      const { missingPhotos } = await saveCurrent(thumbnail);
+      if (missingPhotos > 0) {
+        showToast(
+          `Saved, but ${missingPhotos} photo${missingPhotos === 1 ? '' : 's'} couldn't be stored and won't reopen.`,
+          true,
+        );
+      } else {
+        showToast('Saved');
+      }
+    } catch (err) {
+      showToast(`Couldn't save: ${describeSaveError(err)}`, true);
+    }
+  }, [select, showToast]);
 
   const setImportFailures = useEditorStore((s) => s.setImportFailures);
 
@@ -119,7 +168,7 @@ export default function App() {
     // Deselect so the transformer handles aren't baked into the export.
     select(null);
     requestAnimationFrame(() => {
-      const name = exportFileName.trim() || 'collage';
+      const name = exportFileName.trim() || fileNameForProject(useEditorStore.getState().projectName);
       const isJpg = exportFormat === 'jpeg';
       const uri = handle.exportDataURL({
         mimeType: isJpg ? 'image/jpeg' : 'image/png',
@@ -228,7 +277,11 @@ export default function App() {
       </div>
       <StatusBar />
       <ProjectsModal open={projectsOpen} onClose={() => setProjectsOpen(false)} />
-      {savedToast && <div className="toast">Saved</div>}
+      {toast && (
+        <div className={`toast ${toast.error ? 'is-error' : ''}`} role={toast.error ? 'alert' : 'status'}>
+          {toast.text}
+        </div>
+      )}
       <ImportWarningBanner />
     </div>
   );

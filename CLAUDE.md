@@ -25,6 +25,15 @@ specific to working here with Claude Code, or worth calling out twice.
 
 ## Things easy to miss by only reading the code
 
+- `npm run test:e2e` reuses whatever is already listening on port 5173
+  (`reuseExistingServer`). If another project's dev server holds that port,
+  every test runs against the wrong app and fails with "element not found" —
+  check the port before debugging the tests.
+- `AGENTS.md`'s **Storage** and **State And History** sections record rules
+  the save/crop/export code depends on (storage lock, immutable assets,
+  `refitCrop` over `coverCrop`, reference-based unsaved-changes tracking,
+  blur radius in cache pixels). Read them before changing those areas.
+
 - This app has **two responsive layouts** sharing the same components:
   desktop (fixed inspector, full toolbar) and mobile/touch (inspector becomes
   a slide-over drawer, secondary toolbar actions move into an overflow menu).

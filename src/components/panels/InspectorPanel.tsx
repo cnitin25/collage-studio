@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useEditorStore } from '../../store/useEditorStore';
+import { useEditorStore, fileNameForProject } from '../../store/useEditorStore';
 import type { CanvasPreset } from '../../types';
 import { AccordionContext } from './AccordionContext';
 import LayoutPanel from './LayoutPanel';
@@ -47,6 +47,7 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed }:
   const setExportScale = useEditorStore((s) => s.setExportScale);
   const exportFileName = useEditorStore((s) => s.exportFileName);
   const setExportFileName = useEditorStore((s) => s.setExportFileName);
+  const projectName = useEditorStore((s) => s.projectName);
   const exportFormat = useEditorStore((s) => s.exportFormat);
   const setExportFormat = useEditorStore((s) => s.setExportFormat);
   const resetView = useEditorStore((s) => s.resetView);
@@ -167,7 +168,8 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed }:
           value={exportFileName}
           spellCheck={false}
           onChange={(e) => setExportFileName(e.target.value)}
-          placeholder="File name"
+          aria-label="Export file name"
+          placeholder={fileNameForProject(projectName)}
         />
         <div className="chip-row" style={{ marginBottom: 10 }}>
           {(['png', 'jpeg'] as const).map((f) => (
@@ -195,7 +197,7 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed }:
         </div>
         <p className="dim small">
           {canvas.width * exportScale} × {canvas.height * exportScale} px ·{' '}
-          {exportFileName.trim() || 'collage'}.{exportFormat === 'jpeg' ? 'jpg' : 'png'}
+          {exportFileName.trim() || fileNameForProject(projectName)}.{exportFormat === 'jpeg' ? 'jpg' : 'png'}
         </p>
       </CollapsiblePanel>
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useEditorStore } from '../store/useEditorStore';
+import { useEditorStore, DEFAULT_PROJECT_NAME, hasUnsavedChanges } from '../store/useEditorStore';
 import { listProjects, openProject, removeProject, type ProjectMeta } from '../storage/projects';
 import { exportProjectFile, importProjectFile } from '../storage/projectFile';
 
@@ -35,7 +35,13 @@ export default function ProjectsModal({ open, onClose }: Props) {
 
   if (!open) return null;
 
+  /** Every action that replaces the editor's contents goes through this. */
+  const okToDiscard = () =>
+    !hasUnsavedChanges(useEditorStore.getState()) ||
+    window.confirm('This collage has unsaved changes. Discard them?');
+
   const handleOpen = async (id: string) => {
+    if (!okToDiscard()) return;
     const res = await openProject(id);
     if (res) {
       loadSerializedState(res.state, res.meta.id, res.meta.name);
@@ -43,12 +49,20 @@ export default function ProjectsModal({ open, onClose }: Props) {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    await removeProject(id);
+  const handleDelete = async (p: ProjectMeta) => {
+    if (!window.confirm(`Delete "${p.name}"? This can't be undone.`)) return;
+    await removeProject(p.id);
+    const st = useEditorStore.getState();
+    if (p.id === st.currentProjectId) {
+      // What's on screen no longer exists anywhere — mark it unsaved (the
+      // empty-items baseline can never match a canvas that has content).
+      st.markSaved({ ...st.savedRef, items: [] });
+    }
     refresh();
   };
 
   const handleNew = () => {
+    if (!okToDiscard()) return;
     resetProject();
     onClose();
   };
@@ -59,7 +73,7 @@ export default function ProjectsModal({ open, onClose }: Props) {
     setExporting(true);
     try {
       await exportProjectFile({
-        name: st.projectName.trim() || 'Untitled',
+        name: st.projectName.trim() || DEFAULT_PROJECT_NAME,
         canvas: st.canvas,
         items: st.items,
         spacing: st.spacing,
@@ -131,7 +145,7 @@ export default function ProjectsModal({ open, onClose }: Props) {
             </button>
             <button
               className="btn"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => okToDiscard() && fileInputRef.current?.click()}
               title="Reopen a project from an exported file"
             >
               Import file
@@ -177,7 +191,7 @@ export default function ProjectsModal({ open, onClose }: Props) {
               </div>
               <button
                 className="project-del"
-                onClick={() => handleDelete(p.id)}
+                onClick={() => handleDelete(p)}
                 title={`Delete "${p.name}"`}
                 aria-label="Delete"
               >

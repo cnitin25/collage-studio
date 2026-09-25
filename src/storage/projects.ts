@@ -1,10 +1,13 @@
 import type { CanvasConfig, CollageItem } from '../types';
 import type { LayoutSpec, SpacingOptions } from '../layout/types';
 import {
+  deleteAsset,
   deleteProjectRec,
+  getAllAssetKeys,
   getAllProjectRecs,
   getAssetBlob,
   getProjectRec,
+  hasAsset,
   putAsset,
   putProjectRec,
 } from './db';
@@ -27,28 +30,101 @@ interface StoredProject extends ProjectMeta {
   state: SerializedState;
 }
 
+export interface SaveResult extends ProjectMeta {
+  /** Photos that were neither already stored nor readable from their URL —
+   * the project is saved, but these won't come back when it's reopened. */
+  missingPhotos: number;
+}
+
+// Saves and garbage collection run one at a time. Otherwise a collection pass
+// could run after a save has written its photo blobs but before it has written
+// the project record that references them — and delete those blobs as orphans.
+let storageQueue: Promise<unknown> = Promise.resolve();
+function withStorageLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = storageQueue.then(fn, fn);
+  storageQueue = run.catch(() => {});
+  return run;
+}
+
+/**
+ * Store one photo blob under its assetId. Returns false only when the blob is
+ * genuinely unavailable (no URL, or a URL that no longer resolves).
+ *
+ * A blob never changes under an existing assetId — replacing a photo or
+ * uploading a background mints a new one — so an asset that's already stored
+ * is skipped. Without that, every save (and every 30s auto-save) rewrote every
+ * photo in the project.
+ *
+ * Storage errors are deliberately NOT caught: a full disk (QuotaExceededError)
+ * must fail the save, not produce a project that says "Saved" with its photos
+ * missing.
+ */
+async function persistAsset(assetId: string, src: string | undefined): Promise<boolean> {
+  if (await hasAsset(assetId)) return true;
+  if (!src) return false;
+  let blob: Blob;
+  try {
+    blob = await fetch(src).then((r) => r.blob());
+  } catch {
+    return false;
+  }
+  await putAsset(assetId, blob);
+  return true;
+}
+
+/** Delete every stored photo blob that no saved project references. */
+async function collectGarbageAssets(): Promise<void> {
+  const projects = (await getAllProjectRecs()) as StoredProject[];
+  const live = new Set<string>();
+  for (const p of projects) {
+    for (const it of p.state.items) {
+      if (it.type === 'image' && it.assetId) live.add(it.assetId);
+    }
+    if (p.state.canvas.backgroundAssetId) live.add(p.state.canvas.backgroundAssetId);
+  }
+  for (const key of await getAllAssetKeys()) {
+    if (!live.has(key)) await deleteAsset(key);
+  }
+}
+
+async function collectGarbageQuietly(): Promise<void> {
+  try {
+    await collectGarbageAssets();
+  } catch (err) {
+    // Cleanup is best-effort — a failure here must never fail the save/delete
+    // that triggered it. Orphans are simply picked up by the next pass.
+    console.warn('Collage Studio: asset cleanup failed', err);
+  }
+}
+
 /**
  * Persist a project. Image blobs are recovered from their (blob:) object URLs
  * via fetch and stored under assetId, so reopening rebuilds them later.
+ * Rejects if storage fails (e.g. the browser's quota is full).
  */
-export async function saveProject(args: {
+export function saveProject(args: {
   id: string;
   name: string;
   state: SerializedState;
   thumbnail?: string;
-}): Promise<ProjectMeta> {
+}): Promise<SaveResult> {
+  return withStorageLock(() => saveProjectUnlocked(args));
+}
+
+async function saveProjectUnlocked(args: {
+  id: string;
+  name: string;
+  state: SerializedState;
+  thumbnail?: string;
+}): Promise<SaveResult> {
   const { id, name, state, thumbnail } = args;
 
+  let missingPhotos = 0;
   const seen = new Set<string>();
   for (const it of state.items) {
-    if (it.type === 'image' && it.assetId && it.src && !seen.has(it.assetId)) {
+    if (it.type === 'image' && it.assetId && !seen.has(it.assetId)) {
       seen.add(it.assetId);
-      try {
-        const blob = await fetch(it.src).then((r) => r.blob());
-        await putAsset(it.assetId, blob);
-      } catch {
-        // image no longer available — skip; it just won't restore
-      }
+      if (!(await persistAsset(it.assetId, it.src))) missingPhotos++;
     }
   }
 
@@ -56,14 +132,9 @@ export async function saveProject(args: {
   // same blob-persistence treatment or it silently vanishes on reopen (the
   // src is a blob: URL that dies with the page).
   const { backgroundType, backgroundImageSrc, backgroundAssetId } = state.canvas;
-  if (backgroundType === 'image' && backgroundImageSrc && backgroundAssetId && !seen.has(backgroundAssetId)) {
+  if (backgroundType === 'image' && backgroundAssetId && !seen.has(backgroundAssetId)) {
     seen.add(backgroundAssetId);
-    try {
-      const blob = await fetch(backgroundImageSrc).then((r) => r.blob());
-      await putAsset(backgroundAssetId, blob);
-    } catch {
-      // image no longer available — skip; it just won't restore
-    }
+    if (!(await persistAsset(backgroundAssetId, backgroundImageSrc))) missingPhotos++;
   }
 
   // `thumbnail` is optional per call (e.g. auto-save doesn't render one). Since
@@ -85,7 +156,9 @@ export async function saveProject(args: {
       : state.canvas;
   const updatedAt = Date.now();
   await putProjectRec({ id, name, updatedAt, thumbnail: finalThumbnail, state: { ...state, items, canvas } });
-  return { id, name, updatedAt, thumbnail: finalThumbnail };
+  // A replaced or deleted photo leaves its old blob behind; drop it now.
+  await collectGarbageQuietly();
+  return { id, name, updatedAt, thumbnail: finalThumbnail, missingPhotos };
 }
 
 export async function openProject(
@@ -123,6 +196,10 @@ export async function listProjects(): Promise<ProjectMeta[]> {
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-export async function removeProject(id: string): Promise<void> {
-  await deleteProjectRec(id);
+/** Delete a project and every photo blob no other project still uses. */
+export function removeProject(id: string): Promise<void> {
+  return withStorageLock(async () => {
+    await deleteProjectRec(id);
+    await collectGarbageQuietly();
+  });
 }

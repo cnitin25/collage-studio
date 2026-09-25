@@ -1,3 +1,4 @@
+import { useCallback, useRef } from 'react';
 import { useEditorStore } from '../../store/useEditorStore';
 import CollapsiblePanel from './CollapsiblePanel';
 import type { TextAlign } from '../../types';
@@ -32,7 +33,32 @@ export default function InsertPanel() {
   const beginChange = useEditorStore((s) => s.beginChange);
   const updateItemLive = useEditorStore((s) => s.updateItemLive);
   const commitChange = useEditorStore((s) => s.commitChange);
-  const startEditingText = useEditorStore((s) => s.startEditingText);
+  const cancelChange = useEditorStore((s) => s.cancelChange);
+  // The text box's current edit session: which item, and its text at focus.
+  const session = useRef<{ id: string; textAtFocus: string } | null>(null);
+
+  /** End the session: one undo step if the text changed, none if it didn't.
+   * Safe to call twice — blur and unmount can both fire for one session. */
+  const finishTextEdit = useCallback(() => {
+    const sess = session.current;
+    if (!sess) return;
+    session.current = null;
+    const now = useEditorStore.getState().items.find((i) => i.id === sess.id);
+    // An empty Konva text has nothing left to click; keep a space, as the
+    // on-canvas editor does.
+    if (now?.type === 'text' && now.text === '') updateItemLive(sess.id, { text: ' ' });
+    const final = useEditorStore.getState().items.find((i) => i.id === sess.id);
+    if (final?.type === 'text' && final.text !== sess.textAtFocus) commitChange();
+    else cancelChange();
+  }, [updateItemLive, commitChange, cancelChange]);
+  // Stable identity matters: React calls a ref callback with null whenever the
+  // callback itself changes, which would end the session on every keystroke.
+  const textBoxRef = useCallback(
+    (el: HTMLTextAreaElement | null) => {
+      if (!el) finishTextEdit();
+    },
+    [finishTextEdit],
+  );
 
   const sel = items.find((i) => i.id === selectedId);
   const selText = sel && sel.type === 'text' ? sel : null;
@@ -63,13 +89,26 @@ export default function InsertPanel() {
       {selText && (
         <>
           <p className="subhead" style={{ marginTop: 14 }}>Text</p>
+          {/* Edits the text in place — deliberately NOT via startEditingText():
+              that opens the on-canvas overlay, which grabs focus, which blurs
+              this field, which ended editing again — leaving the field
+              impossible to type into. One focus-to-blur session is one undo
+              step (not one per keystroke), and none if nothing changed. The
+              ref callback also ends it on unmount: collapsing this panel
+              removes the field while focused, and browsers don't reliably
+              fire blur for a removed element. */}
           <textarea
+            ref={textBoxRef}
             className="text-input"
+            aria-label="Text"
             value={selText.text}
             rows={2}
-            onChange={(e) => updateItem(selText.id, { text: e.target.value })}
-            onFocus={() => startEditingText(selText.id)}
-            onBlur={() => useEditorStore.getState().stopEditingText()}
+            onFocus={() => {
+              session.current = { id: selText.id, textAtFocus: selText.text };
+              beginChange('Edit text');
+            }}
+            onChange={(e) => updateItemLive(selText.id, { text: e.target.value })}
+            onBlur={finishTextEdit}
           />
 
           <p className="subhead">Font</p>

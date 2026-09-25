@@ -4,7 +4,7 @@ import useImage from 'use-image';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type { ImageItem } from '../../types';
-import { coverCrop } from '../../utils/cover';
+import { refitCrop } from '../../utils/cover';
 import { drawShapePath } from '../../utils/shapes';
 import { registerImageNode } from '../../utils/imageNodeRegistry';
 
@@ -197,7 +197,10 @@ export default function ImageNode({
       height,
       rotation: g.rotation(),
     };
-    if (item.crop) patch.crop = coverCrop(item.naturalWidth, item.naturalHeight, width, height);
+    // Always crop to the new box: keeps any crop zoom/centre the user set, and
+    // for a never-cropped photo crops it to its new shape instead of letting
+    // Konva stretch the whole image into it.
+    patch.crop = refitCrop(item.naturalWidth, item.naturalHeight, item.crop, item.width, item.height, width, height);
     onChange(patch);
   };
 
@@ -265,7 +268,10 @@ export default function ImageNode({
           saturation={(f.saturation ?? 0) / 50}
           hue={-(f.hue ?? 0)}
           enhance={(f.enhance ?? 0) / 100}
-          blurRadius={f.blur ?? 0}
+          // Konva blurs raw cache pixels, and the cache is made at the screen's
+          // pixel ratio — scale so the blur is the same in canvas px on every
+          // screen and in exports (CanvasStage re-scales it for 2x/3x export).
+          blurRadius={(f.blur ?? 0) * Konva.pixelRatio}
           draggable={isCropping}
           dragBoundFunc={() =>
             lockedAbs.current ?? imgRef.current?.getAbsolutePosition() ?? { x: 0, y: 0 }

@@ -7,7 +7,7 @@ import {
   useState,
 } from 'react';
 import { Stage, Layer, Group, Line, Shape, Transformer } from 'react-konva';
-import type Konva from 'konva';
+import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useEditorStore } from '../../store/useEditorStore';
 import ImageNode from './ImageNode';
@@ -124,12 +124,50 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
       const savedPos = { x: stage.x(), y: stage.y() };
       stage.scale({ x: display.scale, y: display.scale });
       stage.position({ x: 0, y: 0 });
+
+      // Filtered images (and a blurred background) draw from a Konva cache
+      // made at the screen's pixel ratio. A 2x/3x export would upscale that
+      // cache and come out soft, so re-cache at export resolution for the
+      // capture and restore afterwards. Blur runs on raw cache pixels, so its
+      // radius has to scale with the cache too (ImageNode/Background set it
+      // as canvas px × Konva.pixelRatio for the on-screen cache).
+      const exportRatio = pixelRatioMultiplier;
+      const recache =
+        exportRatio > Konva.pixelRatio
+          ? stage.find<Konva.Image>('Image').filter((n) => n.isCached())
+          : [];
+      const savedBlur = recache.map((n) => n.blurRadius());
+      recache.forEach((n, i) => {
+        n.blurRadius((savedBlur[i] / Konva.pixelRatio) * exportRatio);
+        n.cache({ pixelRatio: exportRatio });
+      });
       stage.batchDraw();
+
       let uri: string | null = null;
       try {
         const pixelRatio = (1 / display.scale) * pixelRatioMultiplier;
-        uri = stage.toDataURL({ mimeType, quality, pixelRatio });
+        if (mimeType === 'image/jpeg') {
+          // JPEG has no transparency: anything transparent (the corners cut
+          // off by a rounded collage frame) would otherwise encode as black.
+          const src = stage.toCanvas({ pixelRatio });
+          const out = document.createElement('canvas');
+          out.width = src.width;
+          out.height = src.height;
+          const ctx = out.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, out.width, out.height);
+            ctx.drawImage(src, 0, 0);
+            uri = out.toDataURL(mimeType, quality);
+          }
+        } else {
+          uri = stage.toDataURL({ mimeType, quality, pixelRatio });
+        }
       } finally {
+        recache.forEach((n, i) => {
+          n.blurRadius(savedBlur[i]);
+          n.cache();
+        });
         stage.scale(savedScale);
         stage.position(savedPos);
         stage.batchDraw();

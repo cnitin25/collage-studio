@@ -14,7 +14,7 @@ import type { LoadedImage } from '../utils/loadImage';
 import type { ImageLoadFailure } from '../utils/loadImage';
 import type { LayoutSpec, SpacingOptions } from '../layout/types';
 import { computeLayout } from '../layout/strategies';
-import { coverCrop } from '../utils/cover';
+import { coverCrop, refitCrop } from '../utils/cover';
 import { FRAMES, type FrameId } from '../style/frames';
 import { ENHANCE_PRESETS, DEFAULT_PRESET_STRENGTH, NEUTRAL_FILTERS, scaleEnhanceFilters } from '../style/enhancePresets';
 import type { SerializedState } from '../storage/projects';
@@ -27,6 +27,15 @@ interface Snapshot {
   canvas: CanvasConfig;
   spacing: SpacingOptions;
   lastLayout: LayoutSpec | null;
+}
+
+/** The state as of the last save/load, by reference (see hasUnsavedChanges). */
+export interface SavedRef {
+  items: CollageItem[];
+  canvas: CanvasConfig;
+  spacing: SpacingOptions;
+  lastLayout: LayoutSpec | null;
+  projectName: string;
 }
 
 interface EditorState {
@@ -51,6 +60,7 @@ interface EditorState {
   lockAspectEnabled: boolean;
   autoSaveEnabled: boolean;
   importFailures: ImageLoadFailure[];
+  savedRef: SavedRef;
   // view state (not part of undo history)
   viewScale: number;
   viewX: number;
@@ -124,6 +134,8 @@ interface EditorState {
   setImportFailures: (failures: ImageLoadFailure[]) => void;
   loadSerializedState: (state: SerializedState, id: string, name: string) => void;
   resetProject: () => void;
+  markSaved: (ref: SavedRef) => void;
+  cancelChange: () => void;
 
   undo: () => void;
   redo: () => void;
@@ -150,7 +162,52 @@ const DEFAULT_CANVAS: CanvasConfig = {
 };
 
 const DEFAULT_SPACING: SpacingOptions = { margin: 24, gutter: 12, padding: 0 };
+
+export const DEFAULT_PROJECT_NAME = 'Collage';
+
+/** Export file name derived from a project name — characters Windows/macOS
+ *  refuse in a file name become '-', and a blank name falls back to the default. */
+export function fileNameForProject(projectName: string): string {
+  return projectName.replace(/[\\/:*?"<>|]+/g, '-').trim() || DEFAULT_PROJECT_NAME;
+}
+
+/** The export file name follows the project name until the user types their
+ *  own. "Default" is read off the value itself (blank, or exactly what the
+ *  current project name would produce) rather than a separate flag, so typing
+ *  the derived name back — or clearing the field — re-links it. */
+function renameProjectDraft(s: Draft<EditorState>, name: string): void {
+  const fileNameIsDefault =
+    s.exportFileName.trim() === '' || s.exportFileName === fileNameForProject(s.projectName);
+  s.projectName = name;
+  if (fileNameIsDefault) s.exportFileName = fileNameForProject(name);
+}
+
 const HISTORY_LIMIT = 60;
+
+export function savedRefOf(s: SavedRef): SavedRef {
+  return { items: s.items, canvas: s.canvas, spacing: s.spacing, lastLayout: s.lastLayout, projectName: s.projectName };
+}
+
+/**
+ * True when the editor holds work that isn't in the last save/load. Compares
+ * by reference: immer hands back a new object for anything that changed and
+ * the same object for anything that didn't, so this needs no deep compare —
+ * at the cost of reading "changed then changed back" as unsaved, which errs
+ * on the side of asking. An empty canvas is never worth a prompt.
+ */
+export function hasUnsavedChanges(s: SavedRef & { savedRef: SavedRef }): boolean {
+  if (s.items.length === 0) return false;
+  const r = s.savedRef;
+  return (
+    s.items !== r.items ||
+    s.canvas !== r.canvas ||
+    s.spacing !== r.spacing ||
+    s.lastLayout !== r.lastLayout ||
+    s.projectName !== r.projectName
+  );
+}
+
+const INITIAL_ITEMS: CollageItem[] = [];
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -210,12 +267,15 @@ function layoutToDraft(s: Draft<EditorState>, spec: LayoutSpec): void {
     if (!r) return;
     const innerW = Math.max(1, r.width - 2 * pad);
     const innerH = Math.max(1, r.height - 2 * pad);
+    // Refit before overwriting width/height — it needs the old box. Spacing
+    // sliders re-run this on every tick, so a plain cover-crop here reset
+    // every photo's crop the moment any spacing value moved.
+    item.crop = refitCrop(item.naturalWidth, item.naturalHeight, item.crop, item.width, item.height, innerW, innerH);
     item.x = r.x + pad;
     item.y = r.y + pad;
     item.width = innerW;
     item.height = innerH;
     item.rotation = 0;
-    item.crop = coverCrop(item.naturalWidth, item.naturalHeight, innerW, innerH);
   });
   s.lastLayout = spec;
 }
@@ -223,7 +283,7 @@ function layoutToDraft(s: Draft<EditorState>, spec: LayoutSpec): void {
 export const useEditorStore = create<EditorState>()(
   immer((set, get) => ({
     canvas: DEFAULT_CANVAS,
-    items: [],
+    items: INITIAL_ITEMS,
     selectedId: null,
     croppingId: null,
     cropLocked: false,
@@ -232,17 +292,24 @@ export const useEditorStore = create<EditorState>()(
     spacing: DEFAULT_SPACING,
     lastLayout: null,
     exportScale: 1,
-    exportFileName: 'collage',
+    exportFileName: fileNameForProject(DEFAULT_PROJECT_NAME),
     exportFormat: 'png',
     styleClipboard: null,
     currentProjectId: uid('proj'),
-    projectName: 'Untitled',
+    projectName: DEFAULT_PROJECT_NAME,
     layoutLocked: false,
     snapEnabled: true,
     swapModeEnabled: true,
     lockAspectEnabled: false,
     autoSaveEnabled: false,
     importFailures: [],
+    savedRef: {
+      items: INITIAL_ITEMS,
+      canvas: DEFAULT_CANVAS,
+      spacing: DEFAULT_SPACING,
+      lastLayout: null,
+      projectName: DEFAULT_PROJECT_NAME,
+    },
     viewScale: 1,
     viewX: 0,
     viewY: 0,
@@ -423,8 +490,9 @@ export const useEditorStore = create<EditorState>()(
         const gb = { x: b.x, y: b.y, width: b.width, height: b.height, rotation: b.rotation };
         Object.assign(a, gb);
         Object.assign(b, ga);
-        if (a.type === 'image') a.crop = coverCrop(a.naturalWidth, a.naturalHeight, a.width, a.height);
-        if (b.type === 'image') b.crop = coverCrop(b.naturalWidth, b.naturalHeight, b.width, b.height);
+        // Each photo keeps its own crop zoom/centre, refitted to its new cell.
+        if (a.type === 'image') a.crop = refitCrop(a.naturalWidth, a.naturalHeight, a.crop, ga.width, ga.height, a.width, a.height);
+        if (b.type === 'image') b.crop = refitCrop(b.naturalWidth, b.naturalHeight, b.crop, gb.width, gb.height, b.width, b.height);
         // Also swap their ARRAY positions. layoutToDraft assigns cells in array
         // order, so without this, re-running it (from any spacing change) would
         // reassign geometry by the OLD order and silently undo the swap.
@@ -917,7 +985,7 @@ export const useEditorStore = create<EditorState>()(
 
     setProjectName: (name) =>
       set((s) => {
-        s.projectName = name;
+        renameProjectDraft(s, name);
       }),
 
     setLayoutLocked: (v) =>
@@ -974,8 +1042,9 @@ export const useEditorStore = create<EditorState>()(
         s.historyLabels = [];
         s._pending = null;
         s.currentProjectId = id;
-        s.projectName = name;
+        renameProjectDraft(s, name);
       });
+      set({ savedRef: savedRefOf(get()) });
       revokeUnusedImageUrls(removed, [get().items]);
     },
 
@@ -995,10 +1064,20 @@ export const useEditorStore = create<EditorState>()(
         s.historyLabels = [];
         s._pending = null;
         s.currentProjectId = uid('proj');
-        s.projectName = 'Untitled';
+        renameProjectDraft(s, DEFAULT_PROJECT_NAME);
       });
+      set({ savedRef: savedRefOf(get()) });
       revokeUnusedImageUrls(removed, [get().items]);
     },
+
+    markSaved: (ref) => set({ savedRef: ref }),
+
+    // Drops a beginChange() snapshot without recording it — for a gesture that
+    // turned out to change nothing (e.g. focusing a text field, then leaving).
+    cancelChange: () =>
+      set((s) => {
+        s._pending = null;
+      }),
 
     undo: () => {
       if (get().past.length === 0) return;

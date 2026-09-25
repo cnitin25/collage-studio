@@ -791,6 +791,17 @@ button {
   z-index: 50;
 }
 
+/* Error messages are sentences, not a one-word pill — let them wrap. */
+.toast.is-error {
+  background: #d9483b;
+  color: #ffffff;
+  border-radius: 12px;
+  width: max-content;
+  max-width: min(520px, calc(100vw - 32px));
+  text-align: center;
+  line-height: 1.4;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

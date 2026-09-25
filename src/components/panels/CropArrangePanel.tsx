@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useEditorStore } from '../../store/useEditorStore';
 import CollapsiblePanel from './CollapsiblePanel';
 import Slider from '../ui/Slider';
-import { coverCrop } from '../../utils/cover';
+import { coverCrop, refitCrop, type CropRect } from '../../utils/cover';
 
 export default function CropArrangePanel() {
   const selectedId = useEditorStore((s) => s.selectedId);
@@ -27,7 +27,14 @@ export default function CropArrangePanel() {
   // Captures the aspect ratio + center point once, at gesture start, so
   // repeated onChange ticks during one drag resize FROM a fixed origin
   // rather than re-deriving from the already-mutated live value each tick.
-  const resizeBasis = useRef<{ aspect: number; cx: number; cy: number } | null>(null);
+  const resizeBasis = useRef<{
+    aspect: number;
+    cx: number;
+    cy: number;
+    width: number;
+    height: number;
+    crop: CropRect | undefined;
+  } | null>(null);
 
   const sel = items.find((i) => i.id === selectedId);
   if (!sel) return null;
@@ -41,13 +48,16 @@ export default function CropArrangePanel() {
       aspect: sel.width / sel.height,
       cx: sel.x + sel.width / 2,
       cy: sel.y + sel.height / 2,
+      width: sel.width,
+      height: sel.height,
+      crop: sel.crop,
     };
     beginChange('Resize');
   };
 
   const changeResize = (newWidth: number) => {
     if (sel.type !== 'image' || !resizeBasis.current) return;
-    const { aspect, cx, cy } = resizeBasis.current;
+    const { aspect, cx, cy, width, height, crop } = resizeBasis.current;
     const newHeight = Math.max(1, newWidth / aspect);
     const patch: Record<string, unknown> = {
       x: cx - newWidth / 2,
@@ -55,7 +65,9 @@ export default function CropArrangePanel() {
       width: newWidth,
       height: newHeight,
     };
-    if (sel.crop) patch.crop = coverCrop(sel.naturalWidth, sel.naturalHeight, newWidth, newHeight);
+    // Refit from the crop at gesture start (not the live one), so clamping
+    // near the photo's edges can't accumulate drift over a long drag.
+    if (crop) patch.crop = refitCrop(sel.naturalWidth, sel.naturalHeight, crop, width, height, newWidth, newHeight);
     updateItemLive(id, patch);
   };
 
