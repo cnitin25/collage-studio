@@ -15,9 +15,10 @@ import FramePanel from './FramePanel';
 import CollapsiblePanel from './CollapsiblePanel';
 import CommandSearch from '../CommandSearch';
 import { maxExportScale } from '../../utils/exportStage';
-import { BOTTOM_SHEET_QUERY } from '../../hooks/useMediaQuery';
-import Icon from '../ui/Icon';
+import { BOTTOM_SHEET_QUERY, COMPACT_QUERY, useMediaQuery } from '../../hooks/useMediaQuery';
+import Icon, { type IconName } from '../ui/Icon';
 import ModeToggles from '../ModeToggles';
+import ScrollRail from '../ui/ScrollRail';
 
 const PRESETS: CanvasPreset[] = [
   { label: 'Square', width: 1080, height: 1080 },
@@ -51,6 +52,30 @@ function PresetShape({ width, height }: { width: number; height: number }) {
   );
 }
 
+/**
+ * Phone navigation: the left rail's groups, each a set of panel titles shown
+ * together in the scrolling pane on the right. Seven rather than one per
+ * panel so the rail fits the half-height sheet without scrolling itself.
+ * Every panel title must be in exactly one group, or it's unreachable on a
+ * phone — panels.spec.ts checks this against the desktop panel list.
+ */
+const NAV_GROUPS: { id: string; label: string; icon: IconName; titles: readonly string[]; needsSelection?: boolean }[] = [
+  { id: 'canvas', label: 'Canvas', icon: 'ratio', titles: ['Canvas'] },
+  { id: 'layout', label: 'Layout', icon: 'grid', titles: ['Layout'] },
+  { id: 'insert', label: 'Insert', icon: 'text', titles: ['Insert'] },
+  {
+    id: 'photo',
+    label: 'Photo',
+    icon: 'adjust',
+    titles: ['Photo Alignment', 'Crop and Arrange', 'Enhance & Adjust', 'Photo Border'],
+    needsSelection: true,
+  },
+  { id: 'background', label: 'Background', icon: 'image', titles: ['Collage Background', 'Collage frame'] },
+  { id: 'export', label: 'Export', icon: 'download', titles: ['Export settings'] },
+  { id: 'history', label: 'History', icon: 'history', titles: ['History'] },
+];
+const groupOf = (title: string) => NAV_GROUPS.find((g) => g.titles.includes(title)) ?? NAV_GROUPS[0];
+
 interface Props {
   open?: boolean;
   onClose?: () => void;
@@ -62,6 +87,10 @@ interface Props {
 
 export default function InspectorPanel({ open: drawerOpen, onClose, collapsed, expanded = false, onSetExpanded }: Props) {
   const asideRef = useRef<HTMLElement>(null);
+  // Phones only: the search field is hidden behind a header button, since a
+  // permanent one cost the half-height sheet a fifth of its room. Desktop
+  // always shows it (CSS).
+  const [searchOpen, setSearchOpen] = useState(false);
   const drag = useRef<{ y: number } | null>(null);
 
   // The sheet follows a downward drag of its header; on release it closes or
@@ -102,6 +131,7 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed, e
   const canvas = useEditorStore((s) => s.canvas);
   const setCanvasSize = useEditorStore((s) => s.setCanvasSize);
   const requestedPanel = useEditorStore((s) => s.requestedPanel);
+  const requestedAnchor = useEditorStore((s) => s.requestedAnchor);
   const clearRequestedPanel = useEditorStore((s) => s.clearRequestedPanel);
   const exportScale = useEditorStore((s) => s.exportScale);
   const setExportScale = useEditorStore((s) => s.setExportScale);
@@ -111,38 +141,60 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed, e
   const exportFormat = useEditorStore((s) => s.exportFormat);
   const setExportFormat = useEditorStore((s) => s.setExportFormat);
   const resetView = useEditorStore((s) => s.resetView);
+  const hasSelection = useEditorStore((s) => s.selectedId !== null);
 
   const [openId, setOpenId] = useState<string | null>('Canvas');
+  // Phones: rail navigation instead of the accordion. Its own state, so
+  // switching layout (rotating a tablet) doesn't fight the desktop accordion.
+  const railNav = useMediaQuery(COMPACT_QUERY);
+  const [navGroupId, setNavGroupId] = useState(NAV_GROUPS[0].id);
+  const navGroup = NAV_GROUPS.find((g) => g.id === navGroupId) ?? NAV_GROUPS[0];
+  const paneRef = useRef<HTMLDivElement>(null);
   const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
 
   // A new object per request, so asking for the section that's already open
   // still scrolls to it.
-  const [scrollRequest, setScrollRequest] = useState<{ title: string } | null>(null);
+  const [scrollRequest, setScrollRequest] = useState<{ title: string; anchor: string | null } | null>(null);
   useEffect(() => {
     if (requestedPanel) {
-      setScrollRequest({ title: requestedPanel });
+      setScrollRequest({ title: requestedPanel, anchor: requestedAnchor });
       setOpenId(requestedPanel);
+      setNavGroupId(groupOf(requestedPanel).id);
       clearRequestedPanel();
     }
-  }, [requestedPanel, clearRequestedPanel]);
+  }, [requestedPanel, requestedAnchor, clearRequestedPanel]);
 
   // Runs after the commit that opened the requested section (and collapsed the
   // one above it), so the position is measured against the settled layout;
   // a frame scheduled from the request itself could run before that commit
   // and overshoot by the collapsed section's height.
   useEffect(() => {
-    const aside = asideRef.current;
-    if (!scrollRequest || !aside) return;
-    const section = aside.querySelector<HTMLElement>(`[data-panel-title="${scrollRequest.title}"]`);
+    // The scroller is the right-hand pane with rail navigation, otherwise
+    // the inspector itself.
+    const scroller = railNav ? paneRef.current : asideRef.current;
+    if (!scrollRequest || !scroller) return;
+    const panel = scroller.querySelector<HTMLElement>(`[data-panel-title="${scrollRequest.title}"]`);
+    // A spot inside the panel when one was asked for (e.g. its Crop controls).
+    const section =
+      (scrollRequest.anchor &&
+        panel?.querySelector<HTMLElement>(`[data-panel-anchor="${scrollRequest.anchor}"]`)) ||
+      panel;
     if (!section) return;
-    // Scrolls the inspector itself rather than calling scrollIntoView, which
+    // Scrolls the container itself rather than calling scrollIntoView, which
     // also scrolls every ancestor — including the page, even with overflow
     // hidden — and on a phone shifted the whole editor off-screen. Offset by
-    // the sticky top block (search, plus the sheet header on a phone).
-    const head = aside.querySelector<HTMLElement>('.inspector-top')?.offsetHeight ?? 0;
-    const top = aside.scrollTop + section.getBoundingClientRect().top - aside.getBoundingClientRect().top - head;
-    aside.scrollTo({ top, behavior: 'smooth' });
-  }, [scrollRequest]);
+    // the sticky top block on desktop; the pane has nothing sticky above it.
+    const head = railNav ? 0 : scroller.querySelector<HTMLElement>('.inspector-top')?.offsetHeight ?? 0;
+    const top =
+      scroller.scrollTop + section.getBoundingClientRect().top - scroller.getBoundingClientRect().top - head;
+    scroller.scrollTo({ top, behavior: 'smooth' });
+  }, [scrollRequest]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickNavGroup = (id: string) => {
+    setNavGroupId(id);
+    // A new section starts at its top, not wherever the last one was scrolled.
+    paneRef.current?.scrollTo({ top: 0 });
+  };
 
   const maxScale = maxExportScale(canvas.width, canvas.height);
   const effectiveScale = Math.min(exportScale, maxScale);
@@ -164,7 +216,7 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed, e
     >
     {/* Sticky: the search (and, on a phone, the sheet header) stays in reach
         however far the panels are scrolled. */}
-    <div className="inspector-top">
+    <div className={`inspector-top ${searchOpen ? 'is-searching' : ''}`}>
     <div
       className="inspector-drawer-head"
       onPointerDown={onHeadPointerDown}
@@ -174,6 +226,15 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed, e
     >
       <span className="sheet-grabber" aria-hidden />
       <span className="inspector-drawer-title">Tools</span>
+      <button
+        className={`btn btn-ghost sheet-search ${searchOpen ? 'is-active' : ''}`}
+        onClick={() => setSearchOpen((v) => !v)}
+        aria-label={searchOpen ? 'Hide search' : 'Search commands'}
+        aria-expanded={searchOpen}
+        title={searchOpen ? 'Hide search' : 'Search commands'}
+      >
+        <Icon name="search" />
+      </button>
       <button
         className="btn btn-ghost sheet-expand"
         onClick={() => onSetExpanded?.(!expanded)}
@@ -186,9 +247,35 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed, e
         <Icon name="close" />
       </button>
     </div>
-    <CommandSearch />
+    <CommandSearch autoFocus={searchOpen} onDone={() => setSearchOpen(false)} />
     </div>
-    <AccordionContext.Provider value={{ openId, setOpenId }}>
+    {/* Phones: rail on the left, the picked group's panels scrolling on the
+        right. Desktop: both wrappers are display: contents, so the panels
+        are laid out exactly as before. */}
+    <div className="inspector-body">
+    <nav className="inspector-nav" aria-label="Tool sections">
+      {NAV_GROUPS.map((g) => (
+        <button
+          key={g.id}
+          className={`nav-item ${g.id === navGroup.id ? 'is-active' : ''} ${
+            g.needsSelection && !hasSelection ? 'is-unavailable' : ''
+          }`}
+          aria-current={g.id === navGroup.id ? 'page' : undefined}
+          onClick={() => pickNavGroup(g.id)}
+        >
+          <Icon name={g.icon} size={18} />
+          <span>{g.label}</span>
+        </button>
+      ))}
+    </nav>
+    <div className="inspector-pane" ref={paneRef}>
+    {railNav && navGroup.needsSelection && !hasSelection && (
+      <p className="nav-empty">
+        Select a photo on the canvas to align, crop, enhance or frame it. Text and stickers can be
+        aligned and arranged here too.
+      </p>
+    )}
+    <AccordionContext.Provider value={{ openId, setOpenId, navTitles: railNav ? navGroup.titles : null }}>
       <CollapsiblePanel title="Canvas">
         <div className="preset-grid">
           {PRESETS.map((p) => (
@@ -309,6 +396,9 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed, e
 
       <HistoryPanel />
     </AccordionContext.Provider>
+    </div>
+    {railNav && <ScrollRail target={paneRef} />}
+    </div>
     {/* Phones only (CSS): the status bar that carries these on desktop is hidden. */}
     <div className="inspector-modes">
       <ModeToggles stacked />

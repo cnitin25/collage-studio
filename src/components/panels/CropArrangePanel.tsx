@@ -95,7 +95,8 @@ export default function CropArrangePanel() {
             />
           </div>
 
-          <p className="subhead">Crop</p>
+          {/* Anchor: the phone's selection-bar Crop button scrolls here. */}
+          <p className="subhead" data-panel-anchor="crop">Crop</p>
           <div className="chip-row">
             <button
               className={`chip ${cropping ? 'is-active' : ''}`}

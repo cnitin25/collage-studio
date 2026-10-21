@@ -44,7 +44,8 @@ never leave your device.
   visible even with the tools panel collapsed; on a phone they sit at the
   foot of the Tools sheet.
 - **Command search** — the search box at the top of the tools panel stays
-  pinned there while the panels scroll.
+  pinned there while the panels scroll. On a phone it's behind a search
+  button in the Tools sheet's header, so it doesn't take room from the panels.
 - **Projects** — save/open/delete projects in the browser (IndexedDB),
   each with a thumbnail; optional auto-save every 30s (only when something
   changed), and also the moment the page is hidden — switching apps on a
@@ -85,15 +86,30 @@ never leave your device.
     the space above so you can watch a slider's effect; drag or tap its
     header to expand, swipe it down to close. In landscape it's a side panel
     beside the canvas instead;
+  - inside it, a **navigation rail on the left** picks a section — Canvas,
+    Layout, Insert, Photo (alignment, crop & arrange, enhance, border),
+    Background (background + collage frame), Export, History — and the area
+    on the right scrolls through just that section. Photo is dimmed, with a
+    hint, until something is selected. A wide, always-visible scrollbar on
+    the right of that area can be dragged (or tapped to jump), so scrolling
+    never has to start on a control;
+  - **sliders are swipe-safe:** a vertical swipe that starts on one scrolls
+    and leaves its value alone; a sideways drag adjusts it from where it was
+    (no jump to the finger); a tap does nothing — use − / + to step;
   - **selecting an item swaps the thumbnail strip for its actions** — Crop,
     Replace, Adjust, Border, Duplicate, Delete for a photo; Edit, Style,
     Duplicate, Delete for text — docked in place, same height, so the canvas
-    never jumps;
+    never jumps. Crop, Adjust and Border open the Tools sheet at their
+    controls (Crop lands on Done / Reset / Zoom, with the photo still in view
+    above to drag into place);
   - **text is edited in a field docked under the toolbar**, clear of the
     keyboard, where Enter types a new line and Done/Cancel finish;
   - a **Fit** chip shows the zoom level after a pinch and resets it in one
     tap; the status bar is hidden;
   - safe-area padding for notches and the home indicator.
+- **Touch resize handles** — small round handles set just outside the
+  selected item, so they don't cover a photo's rounded corners, with a wide
+  invisible touch area so they're still easy to grab.
 - **Touch sizing** — on any touch screen (tablets included) buttons, chips,
   slider thumbs and toggles grow to finger size, and every text field is
   16 px so iOS doesn't zoom the page when one is focused. Desktop density is
@@ -104,7 +120,9 @@ never leave your device.
   under the cursor/fingers (a pinch can start in the margin around the
   canvas, and releasing one never selects what's under your fingers);
   Space+drag pans.
-- **Undo/redo, keyboard shortcuts, dark/light theme.** A colour picker
+- **Undo/redo, keyboard shortcuts, dark/light theme.** Undo and redo keep the
+  current selection (and the panel you're working in) whenever the selected
+  item still exists. A colour picker
   session, a slider drag, or a text-box edit is one undo step each.
 
 ## Who it's for
@@ -193,6 +211,9 @@ e2e/                        standalone Playwright project (its own
                              icons, print orientation chips, sticky search
     toolbar.spec.ts          icon buttons + tooltips, nothing off-screen from
                              800 to 1280 px, medium-width ⋯ menu
+    sheet-nav.spec.ts        phone rail navigation: every section reachable
+                             once, fits the half sheet, independent scrolling
+    touch-scroll.spec.ts     swipe-safe sliders, the pane's draggable scrollbar
     editing.spec.ts          crop kept on resize/reflow, Insert-panel text box
     export.spec.ts           export sharpness, blur at 1x vs 3x, JPEG corners;
                              phone share sheet, iOS canvas-size clamp

@@ -6,7 +6,14 @@ import { searchPanelCommands, type PanelCommand } from '../style/commandIndex';
  * the panel. Selecting a result opens the matching accordion section via
  * the store's requestedPanel mechanism (the same one addText() already
  * uses to auto-open "Insert"). */
-export default function CommandSearch() {
+interface Props {
+  /** Focus the field on mount — when it was just revealed by a search button. */
+  autoFocus?: boolean;
+  /** Called after a command is chosen, or on Escape (to hide the field again). */
+  onDone?: () => void;
+}
+
+export default function CommandSearch({ autoFocus = false, onDone }: Props) {
   const requestPanel = useEditorStore((s) => s.requestPanel);
   const selectedId = useEditorStore((s) => s.selectedId);
   const selectedIsImage = useEditorStore(
@@ -17,6 +24,11 @@ export default function CommandSearch() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [showResults, setShowResults] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   const results = searchPanelCommands(query);
 
@@ -50,11 +62,13 @@ export default function CommandSearch() {
     requestPanel(cmd.panel);
     setQuery('');
     setShowResults(false);
+    onDone?.();
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
       setShowResults(false);
+      onDone?.();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       setActiveIndex((i) => Math.min(i + 1, results.length - 1));
@@ -73,6 +87,7 @@ export default function CommandSearch() {
   return (
     <div className="command-search" ref={wrapRef}>
       <input
+        ref={inputRef}
         className="command-search-input"
         value={query}
         onChange={(e) => {

@@ -21,8 +21,10 @@ export default function CollapsiblePanel({
 
   // When rendered inside an InspectorPanel accordion, only the panel whose
   // title matches the shared openId is open — expanding one auto-collapses
-  // the rest. Outside that context, each panel manages its own state.
-  const open = accordion ? accordion.openId === title : localOpen;
+  // the rest. Outside that context, each panel manages its own state. In the
+  // phone's rail navigation, a panel shows only within its picked group.
+  const nav = accordion?.navTitles ?? null;
+  const open = nav ? true : accordion ? accordion.openId === title : localOpen;
 
   const toggle = () => {
     if (accordion) {
@@ -32,15 +34,23 @@ export default function CollapsiblePanel({
     }
   };
 
+  if (nav && !nav.includes(title)) return null;
+
   return (
     <section className="panel" data-panel-title={title}>
       <div className="panel-head">
-        <button className="panel-toggle" onClick={toggle} aria-expanded={open}>
-          <span className={`chevron ${open ? 'is-open' : ''}`}>›</span>
+        {nav ? (
           <h2 className="panel-title" style={{ margin: 0 }}>
             {title} {badge}
           </h2>
-        </button>
+        ) : (
+          <button className="panel-toggle" onClick={toggle} aria-expanded={open}>
+            <span className={`chevron ${open ? 'is-open' : ''}`}>›</span>
+            <h2 className="panel-title" style={{ margin: 0 }}>
+              {title} {badge}
+            </h2>
+          </button>
+        )}
         {open && headerExtra}
       </div>
       {open && children}

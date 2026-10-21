@@ -109,7 +109,7 @@ test.describe('on a phone', () => {
     await act(page, `s.setCanvasSize(1080, 1920); s.applyLayout({ type: 'grid' }); s.setExportScale(3); s.select(null)`);
     // The 3× chip is unavailable at this size, and the panel says why.
     await page.locator('.toolbar-tools-toggle').click();
-    await page.locator('[data-panel-title="Export settings"] .panel-toggle').click();
+    await page.locator('.nav-item', { hasText: 'Export' }).click();
     await expect(page.locator('[data-panel-title="Export settings"] .chip', { hasText: '3×' })).toBeDisabled();
     await expect(page.locator('[data-panel-title="Export settings"]')).toContainText("can't make images larger than");
     await page.locator('.inspector-close').click();

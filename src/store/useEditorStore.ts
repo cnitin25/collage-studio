@@ -46,6 +46,8 @@ interface EditorState {
   cropLocked: boolean;
   editingId: string | null; // text being edited inline
   requestedPanel: string | null; // panel title to auto-expand (e.g. after Add text)
+  /** Optional spot inside requestedPanel to scroll to: a [data-panel-anchor] value. */
+  requestedAnchor: string | null;
   spacing: SpacingOptions;
   lastLayout: LayoutSpec | null;
   exportScale: number;
@@ -113,7 +115,7 @@ interface EditorState {
   startEditingText: (id: string) => void;
   stopEditingText: () => void;
   clearRequestedPanel: () => void;
-  requestPanel: (title: string) => void;
+  requestPanel: (title: string, anchor?: string) => void;
 
   setSpacingLive: (patch: Partial<SpacingOptions>) => void;
   select: (id: string | null) => void;
@@ -207,6 +209,18 @@ export function hasUnsavedChanges(s: SavedRef & { savedRef: SavedRef }): boolean
   );
 }
 
+/**
+ * After undo/redo, keep the selection (and crop mode) on any item that still
+ * exists. Clearing it unconditionally unmounted every selection-dependent
+ * panel: undoing an Enhance preset collapsed Enhance & Adjust out from under
+ * the user and left the inspector scrolled down to History.
+ */
+function keepLiveSelection(s: { items: CollageItem[]; selectedId: string | null; croppingId: string | null }) {
+  const exists = (id: string | null) => !!id && s.items.some((i) => i.id === id);
+  if (!exists(s.selectedId)) s.selectedId = null;
+  if (!exists(s.croppingId) || s.croppingId !== s.selectedId) s.croppingId = null;
+}
+
 const INITIAL_ITEMS: CollageItem[] = [];
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -289,6 +303,7 @@ export const useEditorStore = create<EditorState>()(
     cropLocked: false,
     editingId: null,
     requestedPanel: null,
+    requestedAnchor: null,
     spacing: DEFAULT_SPACING,
     lastLayout: null,
     exportScale: 1,
@@ -928,11 +943,13 @@ export const useEditorStore = create<EditorState>()(
     clearRequestedPanel: () =>
       set((s) => {
         s.requestedPanel = null;
+        s.requestedAnchor = null;
       }),
 
-    requestPanel: (title) =>
+    requestPanel: (title, anchor) =>
       set((s) => {
         s.requestedPanel = title;
+        s.requestedAnchor = anchor ?? null;
       }),
 
     stopEditingText: () =>
@@ -1079,8 +1096,7 @@ export const useEditorStore = create<EditorState>()(
         s.canvas = prev.canvas;
         s.spacing = prev.spacing;
         s.lastLayout = prev.lastLayout;
-        s.selectedId = null;
-        s.croppingId = null;
+        keepLiveSelection(s);
         s.editingId = null;
         s._pending = null;
       });
@@ -1099,8 +1115,7 @@ export const useEditorStore = create<EditorState>()(
         s.canvas = next.canvas;
         s.spacing = next.spacing;
         s.lastLayout = next.lastLayout;
-        s.selectedId = null;
-        s.croppingId = null;
+        keepLiveSelection(s);
         s.editingId = null;
         s._pending = null;
       });

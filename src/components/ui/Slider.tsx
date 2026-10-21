@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { COARSE_QUERY, useMediaQuery } from '../../hooks/useMediaQuery';
 
 interface Props {
   label: string;
@@ -42,6 +43,9 @@ export default function Slider({
   onEnd,
 }: Props) {
   const active = useRef(false);
+  const coarse = useMediaQuery(COARSE_QUERY);
+  // Touch gesture on the track (coarse pointers only; see the overlay below).
+  const touch = useRef<{ x: number; y: number; start: number; width: number; dragging: boolean } | null>(null);
 
   const begin = () => {
     if (!active.current) {
@@ -68,8 +72,52 @@ export default function Slider({
     onEnd?.();
   };
 
+  /** Snap a raw value to the step grid and the min/max range. */
+  const snap = (raw: number) => {
+    const stepped = min + Math.round((raw - min) / step) * step;
+    return Number(Math.max(min, Math.min(max, stepped)).toFixed(decimalPlaces(step)));
+  };
+
+  // A native range input jumps to wherever a finger lands, so a swipe meant
+  // to scroll the tools panel that happened to start on a slider changed its
+  // value. On touch the input therefore takes no pointer input; this overlay
+  // waits to see the gesture's direction. Vertical: let the browser scroll
+  // (touch-action: pan-y), value untouched. Horizontal: drag the value
+  // relative to where the finger started — no jump, and no need to hit the
+  // thumb exactly. A tap changes nothing; the − / + buttons step.
+  const onTouchDown = (e: React.PointerEvent<HTMLSpanElement>) => {
+    if (disabled) return;
+    const width = e.currentTarget.getBoundingClientRect().width;
+    touch.current = { x: e.clientX, y: e.clientY, start: value, width, dragging: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onTouchMove = (e: React.PointerEvent<HTMLSpanElement>) => {
+    const t = touch.current;
+    if (!t) return;
+    const dx = e.clientX - t.x;
+    const dy = e.clientY - t.y;
+    if (!t.dragging) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      if (Math.abs(dy) >= Math.abs(dx)) {
+        touch.current = null; // a scroll; the browser has it
+        return;
+      }
+      t.dragging = true;
+      begin();
+    }
+    const next = snap(t.start + (dx / Math.max(1, t.width)) * (max - min));
+    if (next !== value) onChange(next);
+  };
+  const onTouchEnd = () => {
+    if (touch.current?.dragging) end();
+    touch.current = null;
+  };
+
   return (
-    <label className={`slider ${disabled ? 'is-disabled' : ''}`}>
+    // A div, not a <label>: a label forwards any click inside it to its first
+    // control — here the − button — so tapping the track or the name stepped
+    // the value down. The input is named by aria-label instead.
+    <div className={`slider ${disabled ? 'is-disabled' : ''}`}>
       <span className="slider-head">
         <span>{label}</span>
         <span className="dim">
@@ -88,21 +136,34 @@ export default function Slider({
         >
           −
         </button>
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => {
-            begin();
-            onChange(Number(e.target.value));
-          }}
-          onPointerUp={end}
-          onKeyUp={end}
-          onBlur={end}
-        />
+        <span className={`slider-track ${coarse ? 'is-touch' : ''}`}>
+          <input
+            type="range"
+            aria-label={label}
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            disabled={disabled}
+            onChange={(e) => {
+              begin();
+              onChange(Number(e.target.value));
+            }}
+            onPointerUp={end}
+            onKeyUp={end}
+            onBlur={end}
+          />
+          {coarse && (
+            <span
+              className="slider-touch"
+              aria-hidden
+              onPointerDown={onTouchDown}
+              onPointerMove={onTouchMove}
+              onPointerUp={onTouchEnd}
+              onPointerCancel={onTouchEnd}
+            />
+          )}
+        </span>
         <button
           type="button"
           className="slider-step-btn"
@@ -114,6 +175,6 @@ export default function Slider({
           +
         </button>
       </span>
-    </label>
+    </div>
   );
 }

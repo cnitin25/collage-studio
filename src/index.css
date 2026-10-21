@@ -413,6 +413,30 @@ button {
   border-bottom: 1px solid var(--line);
 }
 
+/* Phone rail navigation (InspectorPanel): on desktop the wrappers are
+   display: contents, so the panels lay out exactly as without them. */
+.inspector-body,
+.inspector-pane { display: contents; }
+.inspector-nav,
+.scroll-rail { display: none; }
+
+/* Sliders on touch (Slider.tsx): the input is display-only, the overlay
+   reads the gesture — vertical scrolls the panel, horizontal adjusts. */
+.slider-track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.slider-track input[type='range'] { flex: 1; width: 100%; }
+.slider-track.is-touch input[type='range'] { pointer-events: none; }
+.slider-touch {
+  position: absolute;
+  inset: -8px 0;
+  touch-action: pan-y;
+}
+
 /* Drawer header (Tools label + close button) only shows once .inspector
    becomes an overlay drawer in compact mode — see responsive block below. */
 .inspector-drawer-head {
@@ -1437,7 +1461,7 @@ button {
   flex-direction: column;
   justify-content: center;
   gap: 3px;
-  height: 52px;
+  height: 46px;
   padding: 0 2px;
   border-radius: 9px;
   font-size: 10px;
@@ -1604,11 +1628,112 @@ button {
   }
   .inspector.is-dragging { transition: none; }
 
+  /* Rail on the left, the picked group's panels scrolling on the right; the
+     sheet itself no longer scrolls. */
+  /* (No flex gap: header, body and footer are already ruled off, and the
+     rail needs every pixel to fit all seven items in the half sheet.) */
+  .inspector { overflow: hidden; gap: 0; }
+  .inspector-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    margin: 0 -16px;
+  }
+  .inspector-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+    width: 76px;
+    padding: 4px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    border-right: 1px solid var(--line);
+  }
+  .nav-item {
+    flex-shrink: 0;
+    min-height: 40px;
+    line-height: 1.15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 2px;
+    border: none;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+  .nav-item.is-active {
+    background: var(--panel-hi);
+    color: var(--accent);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+  /* Photo group with nothing selected: still there, so the rail never shifts. */
+  .nav-item.is-unavailable { opacity: 0.45; }
+  .inspector-pane {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 6px 12px 14px;
+    /* The ScrollRail beside it replaces the browser's thin overlay bar. */
+    scrollbar-width: none;
+  }
+  .inspector-pane::-webkit-scrollbar { display: none; }
+
+  /* Always-visible, finger-sized scrollbar for the pane (ScrollRail). */
+  .scroll-rail {
+    display: block;
+    position: relative;
+    flex-shrink: 0;
+    width: 26px;
+    margin: 6px 2px 6px 0;
+    touch-action: none;
+  }
+  .scroll-rail::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 6px;
+    margin-left: -3px;
+    border-radius: 3px;
+    background: var(--panel-hi);
+  }
+  .scroll-rail-thumb {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 10px;
+    margin-left: -5px;
+    border-radius: 5px;
+    background: var(--muted-dim);
+  }
+  .scroll-rail-thumb:active,
+  .scroll-rail:active .scroll-rail-thumb { background: var(--accent); }
+  .nav-empty {
+    margin: 18px 2px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* Search hides behind the header's search button (see InspectorPanel). */
+  .inspector-top:not(.is-searching) .command-search { display: none; }
+  .sheet-search.is-active { color: var(--accent); }
   .inspector-top {
     top: 0; /* the sheet has no top padding */
-    margin: 0 -16px 4px;
-    padding: 0 16px 10px;
+    margin: 0 -16px;
+    padding: 0 16px 6px;
   }
+  .inspector-top.is-searching { padding-bottom: 10px; }
   .inspector-drawer-head {
     display: flex;
     gap: 4px;
@@ -1639,6 +1764,8 @@ button {
     font-weight: 650;
   }
   .inspector-drawer-head .btn {
+    height: 38px;
+    min-width: 40px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1723,7 +1850,8 @@ button {
    moves; the canvas column is padded by the same amount, so the stage refits
    into the visible area instead of sitting behind the sheet. */
 @media (max-width: 768px) and (min-height: 501px) {
-  .app { --sheet-half: 46dvh; }
+  /* Half: canvas stays in view above; tall enough for the 7-item rail. */
+  .app { --sheet-half: 50dvh; }
   .inspector {
     left: 0;
     right: 0;
@@ -1751,7 +1879,7 @@ button {
 
 /* Landscape phone: a side panel, with the canvas narrowed beside it. */
 @media (max-width: 768px) and (max-height: 500px), (pointer: coarse) and (max-height: 500px) {
-  .app { --sheet-side: min(340px, 48vw); }
+  .app { --sheet-side: min(380px, 50vw); }
   .inspector {
     top: calc(56px + env(safe-area-inset-top));
     right: 0;

@@ -95,10 +95,10 @@ export default function App() {
     setToolsOpen(false);
     setSheetExpanded(false);
   }, []);
-  /** Open the tools panel scrolled to one section — the selection bar's buttons. */
+  /** Open the tools panel scrolled to one section (or a spot in it) — the selection bar's buttons. */
   const openPanel = useCallback(
-    (title: string) => {
-      requestPanel(title);
+    (title: string, anchor?: string) => {
+      requestPanel(title, anchor);
       setToolsOpen(true);
     },
     [requestPanel],

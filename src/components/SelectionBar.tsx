@@ -3,8 +3,8 @@ import { useReplacePhoto } from '../hooks/useReplacePhoto';
 import Icon, { type IconName } from './ui/Icon';
 
 interface Props {
-  /** Open the tools sheet at a given panel title. */
-  onOpenPanel: (title: string) => void;
+  /** Open the tools sheet at a given panel title, optionally at an anchor in it. */
+  onOpenPanel: (title: string, anchor?: string) => void;
 }
 
 interface Action {
@@ -46,7 +46,17 @@ export default function SelectionBar({ onOpenPanel }: Props) {
         key: 'crop',
         icon: cropping ? 'check' : 'crop',
         label: cropping ? 'Done' : 'Crop',
-        run: () => (cropping ? endCrop() : startCrop(selected.id)),
+        // Starting a crop also opens its controls (zoom, reset, done) like
+        // Adjust and Border do; the half-height sheet leaves the photo in
+        // view above it, to drag into place.
+        run: () => {
+          if (cropping) {
+            endCrop();
+            return;
+          }
+          startCrop(selected.id);
+          onOpenPanel('Crop and Arrange', 'crop');
+        },
         active: cropping,
       },
       { key: 'replace', icon: 'replace', label: 'Replace', run: replace.open },

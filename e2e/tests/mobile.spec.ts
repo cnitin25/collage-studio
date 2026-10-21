@@ -72,10 +72,11 @@ test.describe('mobile layout', () => {
     // no scrim at half height: the canvas above stays usable
     await expect(page.locator('.drawer-scrim')).toBeHidden();
 
-    // accordion still single-open inside the sheet
-    await page.locator('.panel-toggle', { hasText: 'Layout' }).click();
-    await expect(page.locator('.panel-toggle', { hasText: 'Layout' })).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.locator('.panel-toggle', { hasText: 'Canvas' })).toHaveAttribute('aria-expanded', 'false');
+    // the left rail picks which section the right-hand pane shows
+    await page.locator('.nav-item', { hasText: 'Layout' }).click();
+    await expect(page.locator('.nav-item', { hasText: 'Layout' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('.inspector-pane [data-panel-title="Layout"]')).toBeVisible();
+    await expect(page.locator('[data-panel-title="Canvas"]')).toHaveCount(0);
 
     await page.locator('.inspector-close').click();
     await expect(sheet).not.toHaveClass(/is-open/);
@@ -92,6 +93,7 @@ test.describe('mobile layout', () => {
 
     await page.locator('.toolbar-tools-toggle').click();
     await expect(sheet).toHaveClass(/is-open/);
+    await page.waitForTimeout(350); // measure the header after the slide-in, not during it
     const head = (await page.locator('.inspector-drawer-head').boundingBox())!;
     await page.mouse.move(head.x + 60, head.y + head.height / 2);
     await page.mouse.down();
@@ -140,11 +142,10 @@ test.describe('mobile layout', () => {
     const afterPinch = await getView(page);
     expect(afterPinch.viewScale).toBeGreaterThan(before.viewScale);
 
-    // Reset zoom / pan lives in the Canvas panel — open the drawer to reach it.
-    // Adding text auto-expands the Insert panel (collapsing Canvas, since only
-    // one section is open at a time), so re-open Canvas explicitly first.
+    // Reset zoom / pan lives in the Canvas section. Adding text switched the
+    // sheet to Insert, so pick Canvas in the rail first.
     await page.locator('.toolbar-tools-toggle').click();
-    await page.locator('.panel-toggle', { hasText: 'Canvas' }).click();
+    await page.locator('.nav-item', { hasText: 'Canvas' }).click();
     await page.getByRole('button', { name: 'Reset zoom / pan' }).click();
     const afterReset = await getView(page);
     expect(afterReset).toEqual({ viewScale: 1, viewX: 0, viewY: 0 });
@@ -283,26 +284,29 @@ test.describe('phone editing flow', () => {
     const after = (await page.locator('.konvajs-content').boundingBox())!;
     expect(after.y).toBeCloseTo(before.y, 0);
 
+    // Crop starts crop mode and opens the sheet at its controls; Done there ends it.
     await bar.getByRole('button', { name: 'Crop' }).click();
     expect(await state(page, 's.croppingId')).toBe(id);
-    await bar.getByRole('button', { name: 'Done' }).click();
+    await expect(page.locator('.inspector')).toHaveClass(/is-open/);
+    await page.locator('[data-panel-title="Crop and Arrange"] .chip', { hasText: 'Done' }).click();
     expect(await state(page, 's.croppingId')).toBeNull();
+    await page.locator('.inspector-close').click();
 
     // Adjust opens the sheet at the photo's Enhance panel...
     await bar.getByRole('button', { name: 'Adjust' }).click();
     await expect(page.locator('.inspector')).toHaveClass(/is-open/);
-    await expect(page.locator('.panel-toggle', { hasText: 'Enhance & Adjust' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
-    // ...scrolled so its heading sits just under the sheet's header, not past it.
+    await expect(page.locator('.nav-item', { hasText: 'Photo' })).toHaveAttribute('aria-current', 'page');
+    // ...scrolled so its heading sits at the top of the pane, not past it.
+    // (Polled as one condition: the scroll is smooth, so a single reading can
+    // land mid-way.)
     await expect
       .poll(async () => {
-        const head = (await page.locator('.inspector-drawer-head').boundingBox())!;
+        const pane = (await page.locator('.inspector-pane').boundingBox())!;
         const panel = (await page.locator('[data-panel-title="Enhance & Adjust"]').boundingBox())!;
-        return Math.round(panel.y - (head.y + head.height));
+        const offset = Math.round(panel.y - pane.y);
+        return offset >= -2 && offset < 40;
       })
-      .toBeGreaterThanOrEqual(-2);
+      .toBe(true);
 
     await page.locator('.inspector-close').click();
     await bar.getByRole('button', { name: 'Delete' }).click();

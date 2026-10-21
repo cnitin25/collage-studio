@@ -55,6 +55,10 @@ const ALL_ANCHORS = [
 // derived height and produced runaway/zero-height boxes.
 const TEXT_ANCHORS = ['middle-left', 'middle-right'];
 
+const TOUCH_ANCHOR_SIZE = 12;
+/** ~40 px touch target around a 12 px dot (hit stroke is centred on the edge). */
+const touchAnchorStyle = (anchor: Konva.Rect) => anchor.hitStrokeWidth(28);
+
 function itemBox(it: CollageItem): Box {
   return { x: it.x, y: it.y, ...itemSize(it) };
 }
@@ -592,7 +596,14 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
             }
             anchorStroke="#ff7a59"
             anchorFill="#ffffff"
-            anchorSize={coarsePointer ? 22 : 10}
+            // Touch: small round handles set just outside the box (padding),
+            // so they don't sit on a photo's rounded corners; the grab area
+            // is a wide invisible hit stroke instead of a big visible square,
+            // which covered the corners of anything shown small on a phone.
+            anchorSize={coarsePointer ? TOUCH_ANCHOR_SIZE : 10}
+            anchorCornerRadius={coarsePointer ? TOUCH_ANCHOR_SIZE / 2 : 0}
+            anchorStyleFunc={coarsePointer ? touchAnchorStyle : undefined}
+            padding={coarsePointer ? TOUCH_ANCHOR_SIZE / 2 : 0}
             borderStroke="#ff7a59"
             borderStrokeWidth={isCroppingSelected ? 3 : 1}
             borderDash={[4, 4]}
