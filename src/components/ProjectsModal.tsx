@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useEditorStore, DEFAULT_PROJECT_NAME, hasUnsavedChanges } from '../store/useEditorStore';
 import { listProjects, openProject, removeProject, type ProjectMeta } from '../storage/projects';
 import { exportProjectFile, importProjectFile } from '../storage/projectFile';
+import { projectsMayBeCleared } from '../storage/persistence';
 
 interface Props {
   open: boolean;
@@ -29,8 +30,12 @@ export default function ProjectsModal({ open, onClose }: Props) {
     }
   };
 
+  const [mayBeCleared, setMayBeCleared] = useState(false);
+
   useEffect(() => {
-    if (open) refresh();
+    if (!open) return;
+    refresh();
+    projectsMayBeCleared().then(setMayBeCleared);
   }, [open]);
 
   if (!open) return null;
@@ -122,6 +127,13 @@ export default function ProjectsModal({ open, onClose }: Props) {
           They stay on this device and browser only: not synced to other devices, and
           cleared if you clear this site's browsing data.
         </p>
+        {mayBeCleared && (
+          <p className="storage-note is-warning">
+            Safari deletes a site's saved data if you don't open it for 7 days. To keep
+            projects, add Collage Studio to your Home Screen (Share → Add to Home Screen),
+            or use Export file below.
+          </p>
+        )}
 
         <div className="backup-row">
           <div className="backup-toggle">

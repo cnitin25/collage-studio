@@ -104,13 +104,6 @@ export const PANEL_COMMANDS: PanelCommand[] = [
     keywords: ['canvas border', 'canvas corner radius'],
   },
   {
-    label: 'Settings',
-    panel: 'Settings',
-    // Not 'auto save' — that toggle lives in the Projects dialog, which a
-    // panel command can't open.
-    keywords: ['snap', 'swap mode', 'lock aspect', 'stay in crop mode', 'lock layout'],
-  },
-  {
     label: 'Export settings',
     panel: 'Export settings',
     keywords: ['png', 'jpeg', 'export scale', 'file name', 'download'],

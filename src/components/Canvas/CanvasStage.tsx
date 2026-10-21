@@ -19,6 +19,7 @@ import type { CollageItem } from '../../types';
 import { computeSnap, collectSnapTargets, nearestSnapTarget, type Box, type Guide } from '../../utils/snap';
 import { itemSize } from '../../utils/itemBox';
 import { UI_OVERLAY } from './overlay';
+import { COARSE_QUERY, useMediaQuery } from '../../hooks/useMediaQuery';
 
 export interface CanvasHandle {
   getStage: () => Konva.Stage | null;
@@ -29,11 +30,18 @@ export interface CanvasHandle {
    * currently visible in the viewport — if the user had panned or zoomed out,
    * the capture would be mostly empty space (transparent → solid black in JPEG).
    */
-  exportDataURL: (opts: {
-    mimeType: 'image/png' | 'image/jpeg';
-    quality?: number;
-    pixelRatioMultiplier?: number;
-  }) => string | null;
+  exportDataURL: (opts: ExportOptions) => string | null;
+  /**
+   * Same rendering as exportDataURL, returned as a canvas — so a caller can
+   * encode it with toBlob() instead of building a multi-megabyte data-URL string.
+   */
+  exportCanvas: (opts: Omit<ExportOptions, 'quality'>) => HTMLCanvasElement | null;
+}
+
+interface ExportOptions {
+  mimeType: 'image/png' | 'image/jpeg';
+  quality?: number;
+  pixelRatioMultiplier?: number;
 }
 
 const CORNER_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
@@ -86,15 +94,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
   // Touch devices get fatter Transformer handles; desktop mouse precision
   // (10px) is untouched. Tracks live so a hybrid device updates if input
   // type changes mid-session.
-  const [coarsePointer, setCoarsePointer] = useState(
-    () => window.matchMedia?.('(pointer: coarse)').matches ?? false,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia('(pointer: coarse)');
-    const onChange = () => setCoarsePointer(mq.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
+  const coarsePointer = useMediaQuery(COARSE_QUERY);
 
   useLayoutEffect(() => {
     const compute = () => {
@@ -112,77 +112,80 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     return () => ro.disconnect();
   }, [canvas.width, canvas.height]);
 
+  const renderExport = ({ mimeType, pixelRatioMultiplier = 1 }: Omit<ExportOptions, 'quality'>) => {
+    const stage = stageRef.current;
+    if (!stage) return null;
+    // Neutralize pan/zoom so the capture always frames the full canvas,
+    // regardless of what the user currently has zoomed/panned to on screen.
+    const savedScale = { x: stage.scaleX(), y: stage.scaleY() };
+    const savedPos = { x: stage.x(), y: stage.y() };
+    stage.scale({ x: display.scale, y: display.scale });
+    stage.position({ x: 0, y: 0 });
+
+    // Filtered images (and a blurred background) draw from a Konva cache
+    // made at the screen's pixel ratio. A 2x/3x export would upscale that
+    // cache and come out soft, so re-cache at export resolution for the
+    // capture and restore afterwards. Blur runs on raw cache pixels, so its
+    // radius has to scale with the cache too (ImageNode/Background set it
+    // as canvas px × Konva.pixelRatio for the on-screen cache).
+    const exportRatio = pixelRatioMultiplier;
+    const recache =
+      exportRatio > Konva.pixelRatio
+        ? stage.find<Konva.Image>('Image').filter((n) => n.isCached())
+        : [];
+    const savedBlur = recache.map((n) => n.blurRadius());
+    recache.forEach((n, i) => {
+      n.blurRadius((savedBlur[i] / Konva.pixelRatio) * exportRatio);
+      n.cache({ pixelRatio: exportRatio });
+    });
+
+    // Editor-only visuals must never reach the file. Export and Save
+    // deselect first, but auto-save runs on a timer and captures whatever
+    // is on screen — selection handles, guides, a crop outline.
+    const overlays = [trRef.current, ...stage.find(`.${UI_OVERLAY}`)].filter(
+      (n): n is Konva.Node => !!n && n.visible(),
+    );
+    overlays.forEach((n) => n.visible(false));
+    stage.batchDraw();
+
+    let out: HTMLCanvasElement | null = null;
+    try {
+      const pixelRatio = (1 / display.scale) * pixelRatioMultiplier;
+      const src = stage.toCanvas({ pixelRatio });
+      if (mimeType === 'image/jpeg') {
+        // JPEG has no transparency: anything transparent (the corners cut
+        // off by a rounded collage frame) would otherwise encode as black.
+        const flat = document.createElement('canvas');
+        flat.width = src.width;
+        flat.height = src.height;
+        const ctx = flat.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, flat.width, flat.height);
+          ctx.drawImage(src, 0, 0);
+          out = flat;
+        }
+      } else {
+        out = src;
+      }
+    } finally {
+      overlays.forEach((n) => n.visible(true));
+      recache.forEach((n, i) => {
+        n.blurRadius(savedBlur[i]);
+        n.cache();
+      });
+      stage.scale(savedScale);
+      stage.position(savedPos);
+      stage.batchDraw();
+    }
+    return out;
+  };
+
   useImperativeHandle(ref, () => ({
     getStage: () => stageRef.current,
     getDisplayScale: () => display.scale * viewScale,
-    exportDataURL: ({ mimeType, quality, pixelRatioMultiplier = 1 }) => {
-      const stage = stageRef.current;
-      if (!stage) return null;
-      // Neutralize pan/zoom so the capture always frames the full canvas,
-      // regardless of what the user currently has zoomed/panned to on screen.
-      const savedScale = { x: stage.scaleX(), y: stage.scaleY() };
-      const savedPos = { x: stage.x(), y: stage.y() };
-      stage.scale({ x: display.scale, y: display.scale });
-      stage.position({ x: 0, y: 0 });
-
-      // Filtered images (and a blurred background) draw from a Konva cache
-      // made at the screen's pixel ratio. A 2x/3x export would upscale that
-      // cache and come out soft, so re-cache at export resolution for the
-      // capture and restore afterwards. Blur runs on raw cache pixels, so its
-      // radius has to scale with the cache too (ImageNode/Background set it
-      // as canvas px × Konva.pixelRatio for the on-screen cache).
-      const exportRatio = pixelRatioMultiplier;
-      const recache =
-        exportRatio > Konva.pixelRatio
-          ? stage.find<Konva.Image>('Image').filter((n) => n.isCached())
-          : [];
-      const savedBlur = recache.map((n) => n.blurRadius());
-      recache.forEach((n, i) => {
-        n.blurRadius((savedBlur[i] / Konva.pixelRatio) * exportRatio);
-        n.cache({ pixelRatio: exportRatio });
-      });
-
-      // Editor-only visuals must never reach the file. Export and Save
-      // deselect first, but auto-save runs on a timer and captures whatever
-      // is on screen — selection handles, guides, a crop outline.
-      const overlays = [trRef.current, ...stage.find(`.${UI_OVERLAY}`)].filter(
-        (n): n is Konva.Node => !!n && n.visible(),
-      );
-      overlays.forEach((n) => n.visible(false));
-      stage.batchDraw();
-
-      let uri: string | null = null;
-      try {
-        const pixelRatio = (1 / display.scale) * pixelRatioMultiplier;
-        if (mimeType === 'image/jpeg') {
-          // JPEG has no transparency: anything transparent (the corners cut
-          // off by a rounded collage frame) would otherwise encode as black.
-          const src = stage.toCanvas({ pixelRatio });
-          const out = document.createElement('canvas');
-          out.width = src.width;
-          out.height = src.height;
-          const ctx = out.getContext('2d');
-          if (ctx) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, out.width, out.height);
-            ctx.drawImage(src, 0, 0);
-            uri = out.toDataURL(mimeType, quality);
-          }
-        } else {
-          uri = stage.toDataURL({ mimeType, quality, pixelRatio });
-        }
-      } finally {
-        overlays.forEach((n) => n.visible(true));
-        recache.forEach((n, i) => {
-          n.blurRadius(savedBlur[i]);
-          n.cache();
-        });
-        stage.scale(savedScale);
-        stage.position(savedPos);
-        stage.batchDraw();
-      }
-      return uri;
-    },
+    exportCanvas: renderExport,
+    exportDataURL: ({ quality, ...opts }) => renderExport(opts)?.toDataURL(opts.mimeType, quality) ?? null,
   }));
 
   // Keyboard: track Space for pan mode
@@ -263,24 +266,79 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     return { x: t.clientX - (rect?.left ?? 0), y: t.clientY - (rect?.top ?? 0) };
   };
 
-  const handleStageMouseDown = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
-    const te = e.evt as TouchEvent;
-    if ('touches' in te && te.touches.length === 2) {
+  // Konva reports the end of a pinch as a tap on whatever is under the
+  // fingers, which would select it; ignore taps during and just after one.
+  const suppressTapUntil = useRef(0);
+  const selectFromCanvas = (id: string) => {
+    if (gesture.current || performance.now() < suppressTapUntil.current) return;
+    select(id);
+  };
+
+  // Pinch listeners live on .canvas-area rather than the Konva stage, so a
+  // pinch that starts in the margin around a small or zoomed-out canvas still
+  // zooms. They're registered once and read the latest view through a ref.
+  const latestView = useRef({ viewScale, viewX, viewY, displayScale: display.scale });
+  latestView.current = { viewScale, viewX, viewY, displayScale: display.scale };
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
       // A second finger landing mid-drag would otherwise leave the item
       // jumping once the gesture ends — cancel any in-progress drag first.
       stageRef.current?.stopDrag();
-      const p0 = touchPoint(te.touches[0]);
-      const p1 = touchPoint(te.touches[1]);
+      const v = latestView.current;
+      const p0 = touchPoint(e.touches[0]);
+      const p1 = touchPoint(e.touches[1]);
       gesture.current = {
         startDist: Math.hypot(p1.x - p0.x, p1.y - p0.y),
-        startScale: viewScale,
+        startScale: v.viewScale,
         startCx: (p0.x + p1.x) / 2,
         startCy: (p0.y + p1.y) / 2,
-        startViewX: viewX,
-        startViewY: viewY,
+        startViewX: v.viewX,
+        startViewY: v.viewY,
       };
-      return;
-    }
+    };
+    const onMove = (e: TouchEvent) => {
+      const g = gesture.current;
+      if (!g || e.touches.length !== 2) return;
+      e.preventDefault();
+      const ds = latestView.current.displayScale;
+      const p0 = touchPoint(e.touches[0]);
+      const p1 = touchPoint(e.touches[1]);
+      const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+      const cx = (p0.x + p1.x) / 2;
+      const cy = (p0.y + p1.y) / 2;
+      const ratio = g.startDist > 0 ? dist / g.startDist : 1;
+      const newScale = Math.max(0.1, Math.min(8, g.startScale * ratio));
+      const contentX = (g.startCx / ds - g.startViewX) / g.startScale;
+      const contentY = (g.startCy / ds - g.startViewY) / g.startScale;
+      // Keep the content point that was under the fingers' starting midpoint
+      // under their CURRENT midpoint (same correction as the wheel zoom).
+      setView(newScale, cx / ds - contentX * newScale, cy / ds - contentY * newScale);
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (gesture.current && e.touches.length < 2) {
+        gesture.current = null;
+        suppressTapUntil.current = performance.now() + 350;
+      }
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [setView]);
+
+  const handleStageMouseDown = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
+    const te = e.evt as TouchEvent;
+    // A second finger belongs to the canvas-area pinch handler above, not a tap.
+    if ('touches' in te && te.touches.length >= 2) return;
     if (spaceDown.current) {
       isPanning.current = true;
       if (wrapRef.current) wrapRef.current.style.cursor = 'grabbing';
@@ -295,29 +353,8 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     if (clickedEmpty) select(null);
   };
 
-  const handleStageMM = (e?: KonvaEventObject<MouseEvent | TouchEvent>) => {
-    const te = e?.evt as TouchEvent | undefined;
-    if (gesture.current && te && 'touches' in te && te.touches.length === 2) {
-      te.preventDefault();
-      const g = gesture.current;
-      const p0 = touchPoint(te.touches[0]);
-      const p1 = touchPoint(te.touches[1]);
-      const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-      const cx = (p0.x + p1.x) / 2;
-      const cy = (p0.y + p1.y) / 2;
-      const ratio = g.startDist > 0 ? dist / g.startDist : 1;
-      const newScale = Math.max(0.1, Math.min(8, g.startScale * ratio));
-      const contentX = (g.startCx / display.scale - g.startViewX) / g.startScale;
-      const contentY = (g.startCy / display.scale - g.startViewY) / g.startScale;
-      // Keep the content point that was under the fingers' starting midpoint
-      // under their CURRENT midpoint (same correction as the wheel zoom).
-      setView(
-        newScale,
-        cx / display.scale - contentX * newScale,
-        cy / display.scale - contentY * newScale,
-      );
-      return;
-    }
+  const handleStageMM = () => {
+    if (gesture.current) return;
     if (!isPanning.current || !panStart.current) return;
     const stage = stageRef.current;
     const p = stage?.getPointerPosition();
@@ -327,12 +364,8 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     setView(viewScale, panStart.current.ox + dx, panStart.current.oy + dy);
   };
 
-  const handleStageMU = (e?: KonvaEventObject<MouseEvent | TouchEvent>) => {
-    const te = e?.evt as TouchEvent | undefined;
-    if (gesture.current) {
-      if (!te || !('touches' in te) || te.touches.length < 2) gesture.current = null;
-      return;
-    }
+  const handleStageMU = () => {
+    if (gesture.current) return;
     if (isPanning.current) {
       isPanning.current = false;
       panStart.current = null;
@@ -458,9 +491,11 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                   <TextNode
                     key={item.id}
                     item={item}
-                    isEditing={editingId === item.id}
+                    // On touch, text is edited in a docked field and the
+                    // node stays visible, updating live (TextEditOverlay).
+                    isEditing={editingId === item.id && !coarsePointer}
                     locked={layoutLocked}
-                    onSelect={() => select(item.id)}
+                    onSelect={() => selectFromCanvas(item.id)}
                     onChange={(patch) => updateItem(item.id, patch)}
                     onStartEdit={() => startEditingText(item.id)}
                     onNodeDragMove={handleNodeDragMove}
@@ -474,7 +509,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                     key={item.id}
                     item={item}
                     locked={layoutLocked}
-                    onSelect={() => select(item.id)}
+                    onSelect={() => selectFromCanvas(item.id)}
                     onChange={(patch) => updateItem(item.id, patch)}
                     onNodeDragMove={handleNodeDragMove}
                     onNodeDragEnd={handleNodeDragEnd}
@@ -493,7 +528,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                   isCropping={croppingId === item.id}
                   isDropTarget={dropTargetId === item.id}
                   locked={layoutLocked}
-                  onSelect={() => select(item.id)}
+                  onSelect={() => selectFromCanvas(item.id)}
                   onChange={(patch) => updateItem(item.id, patch)}
                   onNodeDragMove={handleNodeDragMove}
                   onNodeDragEnd={handleNodeDragEnd}

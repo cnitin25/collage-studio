@@ -98,6 +98,9 @@ export default function LayoutPanel() {
       {suggestions.length > 0 && (
         <>
           <p className="subhead">Suggested</p>
+          {/* Layouts place photos in order, so the fit — and the ranking —
+              is for the current order; Shuffle changes both. */}
+          <p className="dim small suggestion-note">For the current photo order — Shuffle changes them.</p>
           <div className="suggestion-row">
             {suggestions.map((sg, i) => (
               <button

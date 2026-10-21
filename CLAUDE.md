@@ -38,13 +38,16 @@ specific to working here with Claude Code, or worth calling out twice.
   changing those areas.
 
 - This app has **two responsive layouts** sharing the same components:
-  desktop (fixed inspector, full toolbar) and mobile/touch (inspector becomes
-  a slide-over drawer, secondary toolbar actions move into an overflow menu).
-  The only automated coverage for this is `e2e/tests/mobile.spec.ts` — there
-  is no visual regression tool, so a change that looks fine on desktop can
-  silently break the drawer/overflow behavior. Run `npm run test:e2e` after
-  touching `Toolbar.tsx`, `InspectorPanel.tsx`, or `CanvasStage.tsx`'s
-  pan/zoom handling.
+  desktop (fixed inspector, full toolbar) and the compact/phone layout
+  (inspector becomes a bottom sheet, or a side panel in landscape; a
+  selection bar replaces the thumbnail strip; secondary toolbar actions move
+  into an overflow menu). AGENTS.md's UI Conventions has the breakpoint rule.
+  The only automated coverage is `e2e/tests/mobile.spec.ts` (Chromium
+  emulation); there is no visual regression tool, so a change that looks
+  fine on desktop can silently break the phone layout. Run `npm run test:e2e`
+  after touching `Toolbar.tsx`, `InspectorPanel.tsx`, `SelectionBar.tsx`, the
+  responsive CSS, or `CanvasStage.tsx`'s pan/zoom handling, and for a visual
+  check screenshot it with Playwright at 390x844 and 844x390.
 - `README.md` is the user-facing feature list and is expected to stay
   accurate as features ship — update it alongside `AGENTS.md` when adding or
   removing a feature, not just when asked to "update the docs."

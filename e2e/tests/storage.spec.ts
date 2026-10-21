@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import { act, addImage, idbKeys, state } from './helpers';
 
 async function save(page: Page) {
-  await page.locator('.toolbar-secondary button', { hasText: 'Save' }).click();
+  await page.locator('.toolbar-secondary').getByRole('button', { name: 'Save', exact: true }).click();
 }
 
 async function openProjects(page: Page) {
-  await page.locator('.toolbar-secondary button', { hasText: 'Projects' }).click();
+  await page.locator('.toolbar-secondary').getByRole('button', { name: 'Projects', exact: true }).click();
   await expect(page.locator('.modal')).toBeVisible();
 }
 
@@ -138,4 +138,28 @@ test('an exported project file carries the background image, and importing resto
   const bytes = await page.evaluate(async (src) => (await (await fetch(src)).blob()).size, bg);
   expect(bytes).toBeGreaterThan(1000);
   expect(await state<string>(page, 's.items[0].src')).toMatch(/^blob:/);
+});
+
+/** What a phone does when the user switches apps: the page goes hidden. */
+async function hidePage(page: Page) {
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+}
+
+test('hiding the page saves pending work when auto-save is on', async ({ page }) => {
+  await act(page, 's.setAutoSaveEnabled(true)');
+  await addImage(page);
+  // (No idbKeys() check before this: opening the database ahead of the app
+  // would create it empty, with none of the app's object stores.)
+  await hidePage(page);
+  await expect.poll(() => idbKeys(page, 'projects')).toHaveLength(1);
+});
+
+test('hiding the page saves nothing when auto-save is off', async ({ page }) => {
+  await addImage(page);
+  await hidePage(page);
+  await page.waitForTimeout(500);
+  expect(await idbKeys(page, 'projects')).toEqual([]);
 });

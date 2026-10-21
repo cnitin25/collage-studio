@@ -8,6 +8,8 @@ import ProjectsModal from './components/ProjectsModal';
 import ThumbnailStrip from './components/ThumbnailStrip';
 import StatusBar from './components/StatusBar';
 import ImportWarningBanner from './components/ImportWarningBanner';
+import SelectionBar from './components/SelectionBar';
+import { COMPACT_QUERY, useMediaQuery } from './hooks/useMediaQuery';
 import {
   useEditorStore,
   DEFAULT_PROJECT_NAME,
@@ -17,8 +19,10 @@ import {
 } from './store/useEditorStore';
 import { useThemeStore } from './store/useThemeStore';
 import { loadImageFiles } from './utils/loadImage';
-import { downloadDataURL } from './utils/exportStage';
+import { canvasToBlob, maxExportScale, shareOrDownload } from './utils/exportStage';
 import { saveProject } from './storage/projects';
+import { requestPersistentStorage } from './storage/persistence';
+import Icon from './components/ui/Icon';
 
 function describeSaveError(err: unknown): string {
   if (err instanceof DOMException && err.name === 'QuotaExceededError') {
@@ -40,7 +44,13 @@ async function saveCurrent(thumbnail: string | undefined) {
     thumbnail,
   });
   if (result.missingPhotos === 0) useEditorStore.getState().markSaved(ref);
+  void requestPersistentStorage();
   return result;
+}
+
+interface ToastAction {
+  label: string;
+  run: () => void;
 }
 
 export default function App() {
@@ -57,17 +67,42 @@ export default function App() {
   const exportFileName = useEditorStore((s) => s.exportFileName);
   const exportFormat = useEditorStore((s) => s.exportFormat);
   const duplicateSelected = useEditorStore((s) => s.duplicateSelected);
+  const clearAll = useEditorStore((s) => s.clearAll);
+  const requestPanel = useEditorStore((s) => s.requestPanel);
+  const resetView = useEditorStore((s) => s.resetView);
+  const hasSelection = useEditorStore((s) => s.selectedId !== null);
+  const zoomed = useEditorStore((s) => s.viewScale !== 1 || s.viewX !== 0 || s.viewY !== 0);
+  const zoomPercent = useEditorStore((s) => Math.round(s.viewScale * 100));
+  const compact = useMediaQuery(COMPACT_QUERY);
 
   const [projectsOpen, setProjectsOpen] = useState(false);
-  const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
+  const [toast, setToast] = useState<{ text: string; error: boolean; action?: ToastAction } | null>(null);
   const toastTimer = useRef<number>();
-  const showToast = useCallback((text: string, error = false) => {
+  const showToast = useCallback((text: string, error = false, action?: ToastAction) => {
     window.clearTimeout(toastTimer.current);
-    setToast({ text, error });
-    // Errors stay up long enough to actually read.
-    toastTimer.current = window.setTimeout(() => setToast(null), error ? 8000 : 1800);
+    setToast({ text, error, action });
+    // Errors, and anything with a button to press, stay up long enough to act on.
+    toastTimer.current = window.setTimeout(() => setToast(null), error ? 8000 : action ? 6000 : 1800);
+  }, []);
+  const dismissToast = useCallback(() => {
+    window.clearTimeout(toastTimer.current);
+    setToast(null);
   }, []);
   const [toolsOpen, setToolsOpen] = useState(false);
+  // Phone bottom sheet: half height (canvas visible above it) or expanded.
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const closeTools = useCallback(() => {
+    setToolsOpen(false);
+    setSheetExpanded(false);
+  }, []);
+  /** Open the tools panel scrolled to one section — the selection bar's buttons. */
+  const openPanel = useCallback(
+    (title: string) => {
+      requestPanel(title);
+      setToolsOpen(true);
+    },
+    [requestPanel],
+  );
   // Desktop-only: collapses the always-visible sidebar to reclaim canvas
   // width. Distinct from toolsOpen, which drives the mobile slide-in drawer.
   const [panelCollapsed, setPanelCollapsed] = useState(false);
@@ -75,11 +110,17 @@ export default function App() {
   const theme = useThemeStore((s) => s.theme);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    // Match the phone's status bar / browser chrome to the toolbar (--panel).
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', theme === 'dark' ? '#181b22' : '#ffffff');
   }, [theme]);
 
-  // Auto-save every 30 s when there's canvas content
+  // Auto-save every 30 s when there's canvas content, and whenever the page is
+  // hidden. Phones rarely deliver beforeunload: switching apps can be the last
+  // thing the page ever sees before it's evicted, so that's when to save.
   useEffect(() => {
-    const timer = window.setInterval(() => {
+    const autoSave = () => {
       const st = useEditorStore.getState();
       if (!st.autoSaveEnabled || !hasUnsavedChanges(st)) return;
       const handle = canvasRef.current;
@@ -97,8 +138,23 @@ export default function App() {
       // A background save that fails must still say so — silently dropping it
       // is how a full disk goes unnoticed until the project won't reopen.
       saveCurrent(thumbnail).catch((err) => showToast(`Auto-save failed: ${describeSaveError(err)}`, true));
-    }, 30_000);
-    return () => window.clearInterval(timer);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') autoSave();
+    };
+    // pagehide covers browsers that unload without a visibility change first;
+    // when one did fire, it has already saved.
+    const onPageHide = () => {
+      if (document.visibilityState !== 'hidden') autoSave();
+    };
+    const timer = window.setInterval(autoSave, 30_000);
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
   }, [showToast]);
 
   // Closing the tab with unsaved work gets the browser's "Leave site?" prompt.
@@ -162,22 +218,44 @@ export default function App() {
     noKeyboard: true,
   });
 
-  const handleExport = useCallback(() => {
+  const handleExport = useCallback(async () => {
     const handle = canvasRef.current;
     if (!handle) return;
     // Deselect so the transformer handles aren't baked into the export.
     select(null);
-    requestAnimationFrame(() => {
-      const name = exportFileName.trim() || fileNameForProject(useEditorStore.getState().projectName);
-      const isJpg = exportFormat === 'jpeg';
-      const uri = handle.exportDataURL({
-        mimeType: isJpg ? 'image/jpeg' : 'image/png',
-        quality: 0.95,
-        pixelRatioMultiplier: exportScale,
+    await new Promise((r) => requestAnimationFrame(r));
+    const st = useEditorStore.getState();
+    const name = exportFileName.trim() || fileNameForProject(st.projectName);
+    const isJpg = exportFormat === 'jpeg';
+    const mimeType = isJpg ? 'image/jpeg' : 'image/png';
+    const fileName = `${name}.${isJpg ? 'jpg' : 'png'}`;
+    // Past the browser's canvas limit the render comes back blank rather than
+    // failing, so stay under it and say so.
+    const scale = Math.min(exportScale, maxExportScale(st.canvas.width, st.canvas.height));
+    const rendered = handle.exportCanvas({ mimeType, pixelRatioMultiplier: scale });
+    const blob = rendered ? await canvasToBlob(rendered, mimeType, 0.95) : null;
+    if (!blob || blob.size === 0) {
+      showToast("Couldn't create the image — try a smaller size in Export settings.", true);
+      return;
+    }
+    const result = await shareOrDownload(blob, fileName);
+    if (result === 'needs-gesture') {
+      // Rendering outlasted the tap that started it; sharing needs a fresh one.
+      showToast('Your image is ready', false, {
+        label: 'Save / share',
+        run: () => void shareOrDownload(blob, fileName),
       });
-      if (uri) downloadDataURL(uri, `${name}.${isJpg ? 'jpg' : 'png'}`);
-    });
-  }, [select, exportScale, exportFileName, exportFormat]);
+    } else if (result !== 'cancelled' && scale < exportScale) {
+      showToast(`Exported at ${scale}× — the largest this device can make at this canvas size.`);
+    }
+  }, [select, exportScale, exportFileName, exportFormat, showToast]);
+
+  // Clearing is a single undo step, so offer Undo instead of asking first.
+  const handleClearCanvas = useCallback(() => {
+    if (useEditorStore.getState().items.length === 0) return;
+    clearAll();
+    showToast('Canvas cleared', false, { label: 'Undo', run: undo });
+  }, [clearAll, undo, showToast]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -216,15 +294,16 @@ export default function App() {
   }, [undo, redo, removeSelected, select, duplicateSelected]);
 
   return (
-    <div className="app">
+    <div className={`app ${toolsOpen ? 'sheet-open' : ''} ${toolsOpen && sheetExpanded ? 'sheet-expanded' : ''}`}>
       <Toolbar
         onAddImages={open}
         onAddText={addText}
         onExport={handleExport}
         onSave={handleSave}
         onOpenProjects={() => setProjectsOpen(true)}
+        onClearCanvas={handleClearCanvas}
         toolsOpen={toolsOpen}
-        onToggleTools={() => setToolsOpen((v) => !v)}
+        onToggleTools={() => (toolsOpen ? closeTools() : setToolsOpen(true))}
       />
       <div className="workspace">
         <div className="stage-col">
@@ -253,18 +332,31 @@ export default function App() {
               <div className="empty-state" onClick={open}>
                 <div className="empty-card">
                   <div className="empty-icon" aria-hidden>＋</div>
-                  <p className="empty-title">Drop photos to start</p>
-                  <p className="empty-sub">or click to browse — everything stays on your device</p>
+                  <p className="empty-title">
+                    <span className="copy-pointer">Drop photos to start</span>
+                    <span className="copy-touch">Tap to add photos</span>
+                  </p>
+                  <p className="empty-sub">
+                    <span className="copy-pointer">or click to browse — </span>
+                    <span className="copy-touch">from your gallery or camera — </span>
+                    everything stays on your device
+                  </p>
                 </div>
               </div>
+            )}
+            {zoomed && itemCount > 0 && (
+              <button className="fit-chip" onClick={resetView} title="Fit the whole canvas on screen">
+                <Icon name="fit" size={16} /> {zoomPercent}% · Fit
+              </button>
             )}
             {isDragActive && itemCount > 0 && (
               <div className="drag-overlay">Drop to add photos</div>
             )}
           </div>
-          <ThumbnailStrip />
+          {/* On a phone the selection's actions take the strip's place. */}
+          {compact && hasSelection ? <SelectionBar onOpenPanel={openPanel} /> : <ThumbnailStrip keepSlot={compact} />}
         </div>
-        {toolsOpen && <div className="drawer-scrim" onClick={() => setToolsOpen(false)} />}
+        {toolsOpen && <div className="drawer-scrim" onClick={closeTools} />}
         <button
           className={`inspector-collapse-toggle ${panelCollapsed ? 'is-collapsed' : ''}`}
           onClick={() => setPanelCollapsed((v) => !v)}
@@ -273,13 +365,30 @@ export default function App() {
         >
           {panelCollapsed ? '‹' : '›'}
         </button>
-        <InspectorPanel open={toolsOpen} onClose={() => setToolsOpen(false)} collapsed={panelCollapsed} />
+        <InspectorPanel
+          open={toolsOpen}
+          onClose={closeTools}
+          collapsed={panelCollapsed}
+          expanded={sheetExpanded}
+          onSetExpanded={setSheetExpanded}
+        />
       </div>
       <StatusBar />
       <ProjectsModal open={projectsOpen} onClose={() => setProjectsOpen(false)} />
       {toast && (
         <div className={`toast ${toast.error ? 'is-error' : ''}`} role={toast.error ? 'alert' : 'status'}>
           {toast.text}
+          {toast.action && (
+            <button
+              className="toast-action"
+              onClick={() => {
+                toast.action!.run();
+                dismissToast();
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
         </div>
       )}
       <ImportWarningBanner />

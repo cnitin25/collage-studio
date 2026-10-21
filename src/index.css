@@ -78,6 +78,13 @@ button {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* Mobile 100vh includes the strip under the browser's URL bar, which put
+     the bottom bar off-screen; dvh is the height actually visible. */
+  height: 100dvh;
+  /* Notch / home-indicator insets (viewport-fit=cover); 0 on desktop. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  background: var(--panel);
 }
 
 /* ---------- Toolbar ---------- */
@@ -122,17 +129,74 @@ button {
 /* Icon glyphs only render in compact mode (see responsive block below) —
    on desktop the buttons stay text-only, unchanged from before. */
 .btn-icon { display: none; }
+.icon { display: block; flex-shrink: 0; }
+
+/* Icon-only toolbar buttons (Toolbar's ToolButton): square, never squeezed.
+   Names come from aria-label, shown to mouse users as a [data-tip] tooltip. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  padding: 0;
+}
+/* Disabled: dim the icon, not the button. Opacity on the button itself would
+   make it a stacking context, trapping its tooltip underneath the workspace
+   (and fading it to 40%) - and a disabled button's tooltip is the one that
+   explains why it's disabled. */
+.btn.icon-btn:disabled { opacity: 1; }
+.icon-btn:disabled > .icon { opacity: 0.35; }
+.toolbar-actions .btn { flex-shrink: 0; }
+.brand { min-width: 0; }
+.project-name-input { min-width: 0; }
+
+/* Tooltips for [data-tip], on devices that can hover. Faster than the native
+   title tooltip (which is why ToolButton doesn't set title), and themed. */
+@media (hover: hover) {
+  [data-tip] { position: relative; }
+  /* Lift the hovered button so its tooltip paints over what comes after it. */
+  [data-tip]:hover,
+  [data-tip]:focus-visible { z-index: 60; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    z-index: 60;
+    padding: 5px 9px;
+    border-radius: 6px;
+    background: var(--text);
+    color: var(--bg);
+    font-size: 12px;
+    font-weight: 550;
+    line-height: 1.3;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -3px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+  }
+  [data-tip]:hover::after,
+  [data-tip]:focus-visible::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition-delay: 0.3s;
+  }
+  /* Near the right edge: grow leftwards so it isn't cut off. */
+  [data-tip][data-tip-align='end']::after { left: auto; right: 0; transform: translateY(-3px); }
+  [data-tip][data-tip-align='end']:hover::after,
+  [data-tip][data-tip-align='end']:focus-visible::after { transform: none; }
+  /* Not over a menu the button has just opened. */
+  [data-tip][aria-expanded='true']::after { display: none; }
+}
 
 /* Desktop: an invisible wrapper so its buttons behave as direct flex items
    of .toolbar-actions (identical layout to before this was introduced).
    Compact mode hides the whole group at once — see responsive block. */
 .toolbar-secondary { display: contents; }
 
-.toolbar-tools-divider,
-.toolbar-tools-toggle,
-.toolbar-overflow {
-  display: none;
-}
+/* Compact-only toolbar controls (Export icon, tools toggle, ⋯ menu). */
+.toolbar-compact { display: none; }
 
 .toolbar-overflow { position: relative; }
 .overflow-menu {
@@ -151,6 +215,9 @@ button {
   gap: 2px;
 }
 .overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-height: 44px;
   padding: 0 12px;
   border: none;
@@ -165,6 +232,8 @@ button {
 .overflow-item:hover:not(:disabled) { background: var(--panel-hi); }
 .overflow-item:disabled { opacity: 0.4; cursor: not-allowed; }
 .overflow-item.is-active { background: var(--panel-hi); }
+.overflow-item .icon { color: var(--muted); }
+.overflow-sep { height: 1px; margin: 4px 6px; background: var(--line); }
 
 .command-search { position: relative; flex-shrink: 0; }
 .command-search-input {
@@ -325,6 +394,25 @@ button {
   transform: translate(0, -50%);
 }
 
+/* Search (+ the sheet header on a phone): pinned to the top of the scrolling
+   inspector. The negative margins reach over the inspector's padding so the
+   opaque background covers panels scrolling underneath edge to edge. */
+.inspector-top {
+  position: sticky;
+  /* Sticky offsets count from inside the inspector's 16px padding; -16 pins
+     it to the true top edge so nothing shows above it. */
+  top: -16px;
+  z-index: 3;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: -16px -16px 0;
+  padding: 16px 16px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
 /* Drawer header (Tools label + close button) only shows once .inspector
    becomes an overlay drawer in compact mode — see responsive block below. */
 .inspector-drawer-head {
@@ -382,9 +470,16 @@ button {
 .preset:hover { color: var(--text); border-color: var(--hover-border); }
 .preset.is-active { border-color: var(--accent); color: var(--text); }
 
+/* Fixed box per preset so labels line up; the shape inside is sized inline
+   from the preset's real proportions (PresetShape in InspectorPanel). */
+.preset-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+}
 .preset-shape {
-  width: 26px;
-  max-height: 30px;
+  display: block;
   border-radius: 3px;
   background: var(--preset-shape-bg);
   border: 1px solid var(--preset-shape-border);
@@ -451,7 +546,16 @@ button {
   margin-bottom: 12px;
 }
 .empty-title { margin: 0; font-size: 16px; font-weight: 600; }
+/* Empty-state wording follows the input: drop/click with a mouse, tap on touch. */
+.copy-touch { display: none; }
+@media (hover: none) {
+  .copy-touch { display: inline; }
+  .copy-pointer { display: none; }
+}
 .empty-sub { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+
+/* Compact layout only (see the responsive block); desktop shows zoom in the status bar. */
+.fit-chip { display: none; }
 
 .drag-overlay {
   position: absolute;
@@ -506,6 +610,8 @@ button {
   display: flex;
   gap: 8px;
 }
+.suggestion-note { margin: -4px 0 8px; }
+.print-orientation { margin-bottom: 8px; }
 .suggestion {
   flex: 1;
   display: flex;
@@ -699,6 +805,36 @@ button {
   cursor: pointer;
 }
 
+/* Touch text editor: docked under the toolbar, clear of the keyboard. */
+.text-edit-dock {
+  position: fixed;
+  top: calc(56px + env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 12px 30px -12px var(--shadow-color);
+}
+.text-edit-dock-input {
+  width: 100%;
+  max-height: 30dvh;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--panel-hi);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.35;
+  resize: none;
+  outline: none;
+}
+.text-edit-dock-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
 /* Inline text editor sits over the canvas. */
 .text-edit {
   position: absolute;
@@ -789,6 +925,12 @@ button {
   border-radius: 999px;
   box-shadow: 0 8px 24px -6px var(--shadow-color-soft);
   z-index: 50;
+  /* left: 50% would otherwise cap a longer message at half the viewport. */
+  width: max-content;
+  max-width: min(520px, calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 /* Error messages are sentences, not a one-word pill — let them wrap. */
@@ -796,10 +938,20 @@ button {
   background: #d9483b;
   color: #ffffff;
   border-radius: 12px;
-  width: max-content;
-  max-width: min(520px, calc(100vw - 32px));
   text-align: center;
   line-height: 1.4;
+}
+
+.toast-action {
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(26, 15, 10, 0.88);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .modal-backdrop {
@@ -1099,6 +1251,11 @@ button {
   font-size: 12px;
   line-height: 1.5;
 }
+.storage-note.is-warning {
+  border-color: rgba(255, 122, 89, 0.45);
+  background: rgba(255, 122, 89, 0.1);
+  color: var(--text);
+}
 
 /* ---------- Backup: auto-save toggle, export/import file ---------- */
 .backup-row {
@@ -1233,6 +1390,7 @@ button {
   font-size: 11px;
   color: var(--muted);
 }
+.status-bar .mode-toggles { margin-left: auto; }
 .status-primary {
   font-weight: 650;
   color: var(--text);
@@ -1243,6 +1401,49 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ---------- Editor mode toggles (status bar / phone sheet footer) ---------- */
+.mode-toggles {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+.mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.mode-toggle:hover { color: var(--text); border-color: var(--hover-border); }
+.mode-toggle.is-active {
+  background: var(--accent);
+  border-color: transparent;
+  color: #1a0f0a;
+}
+/* Phone sheet footer: icon over label, sharing the width evenly. */
+.mode-toggles.is-stacked { gap: 2px; }
+.mode-toggles.is-stacked .mode-toggle {
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  height: 52px;
+  padding: 0 2px;
+  border-radius: 9px;
+  font-size: 10px;
+}
+.mode-toggles.is-stacked .mode-toggle span { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.inspector-modes { display: none; }
 
 /* ---------- Import warning banner ---------- */
 .import-warning {
@@ -1336,22 +1537,33 @@ button {
 }
 
 /* ==========================================================================
-   Responsive / mobile — everything below only applies at narrow widths.
-   Desktop layout above this block is intentionally untouched.
+   Responsive / mobile. Desktop layout above this block is intentionally
+   untouched.
+
+   COMPACT layout = "(max-width: 768px), (pointer: coarse) and (max-height: 500px)"
+   — narrow windows, plus phones held in landscape, which are wide enough for
+   the desktop layout but far too short for it. Keep every compact @media list
+   below in step with COMPACT_QUERY in src/hooks/useMediaQuery.ts.
    ========================================================================== */
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
   /* ---- Toolbar: icon-only primary actions + overflow menu ---- */
   .toolbar { padding: 0 10px; }
   .toolbar-actions { gap: 4px; }
   .toolbar-actions .btn-icon { display: inline-flex; }
   .toolbar-actions .btn-label { display: none; }
-  .toolbar-actions .btn { padding: 0 10px; }
+  .toolbar-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 10px;
+  }
 
-  .toolbar-secondary { display: none; }
-  .toolbar-tools-divider,
-  .toolbar-tools-toggle,
-  .toolbar-overflow {
+  /* .toolbar-actions prefix: must outrank the .toolbar-actions .btn rule above. */
+  .toolbar-actions .toolbar-secondary,
+  .toolbar-actions .toolbar-wide { display: none; }
+  .toolbar-compact {
     display: inline-flex;
     align-items: center;
   }
@@ -1366,45 +1578,271 @@ button {
     white-space: nowrap;
   }
 
-  /* ---- Workspace: canvas full-width, inspector becomes a slide-in drawer ---- */
+  /* ---- Workspace: canvas full-width; the inspector becomes a sheet ---- */
   .stage-col { min-width: 0; width: 100%; }
 
-  /* Mobile already has its own drawer toggle (.toolbar-tools-toggle) and
-     scrim-dismiss; the desktop collapse tab would just double up on it. */
+  /* Mobile has its own sheet toggle (.toolbar-tools-toggle); the desktop
+     collapse tab would just double up on it. */
   .inspector-collapse-toggle { display: none; }
+
+  /* Pixel dimensions and "original 4032 × 3024" aren't worth 28px of a phone
+     screen; the zoom level moves to the Fit chip. */
+  .status-bar { display: none; }
 
   .inspector {
     position: fixed;
-    top: 56px;
-    right: 0;
-    bottom: 0;
-    width: min(340px, 88vw);
-    transform: translateX(100%);
-    transition: transform 0.22s ease;
     z-index: 31;
-    box-shadow: -12px 0 40px -12px var(--shadow-color);
+    padding-top: 0;
+    box-shadow: 0 -12px 40px -12px var(--shadow-color);
+    visibility: hidden;
+    /* Stay out of tab order / screen readers once the slide-out ends. */
+    transition: transform 0.22s ease, height 0.22s ease, visibility 0s linear 0.22s;
   }
-  .inspector.is-open { transform: translateX(0); }
-  .inspector-drawer-head { display: flex; margin-bottom: 8px; }
-  .drawer-scrim { display: block; }
+  .inspector.is-open {
+    visibility: visible;
+    transition: transform 0.22s ease, height 0.22s ease, visibility 0s;
+  }
+  .inspector.is-dragging { transition: none; }
 
-  /* ---- Cosmetic: status bar, custom-size fields ---- */
-  .status-bar { gap: 6px; overflow: hidden; }
-  .status-bar > * {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .inspector-top {
+    top: 0; /* the sheet has no top padding */
+    margin: 0 -16px 4px;
+    padding: 0 16px 10px;
   }
+  .inspector-drawer-head {
+    display: flex;
+    gap: 4px;
+    position: relative;
+    margin-right: -6px;
+    padding: 14px 0 0;
+    /* The header is the sheet's drag handle. */
+    touch-action: none;
+    user-select: none;
+  }
+
+  /* Editor modes: the status bar is hidden here, so they sit pinned at the
+     foot of the sheet instead. */
+  .inspector-modes {
+    display: block;
+    position: sticky;
+    bottom: calc(-16px - env(safe-area-inset-bottom));
+    z-index: 3;
+    flex-shrink: 0;
+    margin: auto -16px calc(-16px - env(safe-area-inset-bottom));
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+  }
+  .inspector-drawer-title {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .inspector-drawer-head .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+  }
+  .sheet-grabber {
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    width: 40px;
+    height: 4px;
+    margin-left: -20px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+  .drawer-scrim { display: none; }
+
+  /* ---- Fit chip: zoom level, and a one-tap way back after a pinch ---- */
+  .fit-chip {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 6;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 6px 18px -8px var(--shadow-color);
+  }
+
+  /* ---- Selection bar: the selected item's actions, docked at the bottom ---- */
+  .selection-bar {
+    display: flex;
+    flex-shrink: 0;
+    gap: 2px;
+    /* Same height as .thumb-strip, whose slot it takes: no canvas jump. */
+    height: 72px;
+    padding: 6px;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .selbar-btn {
+    flex: 1 0 52px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border: none;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .selbar-btn:active { background: var(--panel-hi); }
+  .selbar-btn.is-active { background: var(--accent); color: #1a0f0a; }
+  .selbar-btn.is-danger { color: #ff8a7d; }
+  .selbar-done { color: var(--muted); }
+
+  /* While the tools sheet is open it replaces both bottom bars. */
+  .app.sheet-open .thumb-strip,
+  .app.sheet-open .selection-bar { display: none; }
+
+  .toast { bottom: calc(92px + env(safe-area-inset-bottom)); }
 
   .custom-size-fields { flex-wrap: wrap; }
+  .empty-card { margin: 0 16px; padding: 28px 24px; }
+}
+
+/* Portrait (any compact window with height to spare): bottom sheet. Half
+   height by default so the canvas stays in view above it while a slider
+   moves; the canvas column is padded by the same amount, so the stage refits
+   into the visible area instead of sitting behind the sheet. */
+@media (max-width: 768px) and (min-height: 501px) {
+  .app { --sheet-half: 46dvh; }
+  .inspector {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: auto;
+    height: var(--sheet-half);
+    max-height: calc(100dvh - 64px - env(safe-area-inset-top));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    border-left: none;
+    border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    transform: translateY(100%);
+  }
+  .inspector.is-open { transform: translateY(0); }
+  .inspector.is-expanded { height: calc(100dvh - 64px - env(safe-area-inset-top)); }
+  .inspector-top { border-radius: 16px 16px 0 0; }
+
+  .app.sheet-open .stage-col {
+    padding-bottom: calc(var(--sheet-half) - env(safe-area-inset-bottom));
+  }
+  /* Expanded, the sheet covers the canvas, so a tap above it should close it. */
+  .app.sheet-expanded .drawer-scrim { display: block; }
+}
+
+/* Landscape phone: a side panel, with the canvas narrowed beside it. */
+@media (max-width: 768px) and (max-height: 500px), (pointer: coarse) and (max-height: 500px) {
+  .app { --sheet-side: min(340px, 48vw); }
+  .inspector {
+    top: calc(56px + env(safe-area-inset-top));
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: var(--sheet-side);
+    padding-right: calc(16px + env(safe-area-inset-right));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    transform: translateX(100%);
+  }
+  .inspector.is-open { transform: translateX(0); }
+  .sheet-grabber,
+  .inspector-drawer-head .sheet-expand { display: none; }
+  .inspector-drawer-head { padding-top: 10px; }
+  .app.sheet-open .stage-col {
+    padding-right: calc(var(--sheet-side) - env(safe-area-inset-right));
+  }
+  .toast { bottom: calc(24px + env(safe-area-inset-bottom)); }
+}
+
+/* Medium widths (desktop layout, but not much room): Duplicate, Delete,
+   Clear canvas and the theme toggle move into the ⋯ menu. Excludes the
+   compact layout — a landscape phone is this wide too — so the two lists are
+   width + (tall enough, or a fine pointer). */
+@media (min-width: 769px) and (max-width: 1000px) and (min-height: 501px),
+  (min-width: 769px) and (max-width: 1000px) and (pointer: fine) {
+  .toolbar-actions .toolbar-mid-hide { display: none; }
+  .toolbar-actions .toolbar-overflow {
+    display: inline-flex;
+    align-items: center;
+  }
+  /* Already on the toolbar at this width. */
+  .overflow-menu .menu-compact { display: none; }
+  .project-name-input { width: 160px; }
 }
 
 @media (max-width: 400px) {
   .project-name-input { display: none; }
   .status-secondary { display: none; }
+  .toolbar-export-label { display: none; }
   .project-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
 
-@media (max-width: 768px) and (prefers-reduced-motion: reduce) {
-  .inspector { transition: none; }
+@media (max-width: 768px) and (prefers-reduced-motion: reduce),
+  (pointer: coarse) and (max-height: 500px) and (prefers-reduced-motion: reduce) {
+  .inspector,
+  .inspector.is-open { transition: none; }
+}
+
+/* ==========================================================================
+   Touch sizing: any coarse pointer (phones and tablets alike, whichever
+   layout they get). Desktop density is a deliberate convention, so this only
+   grows controls for fingers.
+   ========================================================================== */
+@media (pointer: coarse) {
+  .status-bar { height: 46px; }
+  /* (the phone sheet's stacked toggles keep their own, more specific sizing) */
+  .mode-toggle { height: 36px; padding: 0 12px; font-size: 12px; }
+  .btn { height: 44px; }
+  .toolbar-actions .btn { min-width: 44px; }
+  .chip { height: 40px; }
+  .slider-step-btn { width: 36px; height: 36px; font-size: 18px; }
+  .slider-row { gap: 8px; }
+  .slider-row input[type='range'] { height: 6px; }
+  .slider-row input[type='range']::-webkit-slider-thumb { width: 26px; height: 26px; }
+  .slider-row input[type='range']::-moz-range-thumb { width: 26px; height: 26px; }
+  .toggle-row { min-height: 40px; }
+  .toggle-row input { width: 22px; height: 22px; }
+  .panel-toggle { min-height: 40px; }
+  .custom-size-field input,
+  .custom-size .btn { height: 40px; }
+  .project-open-btn { min-height: 36px; }
+  .project-del { width: 36px; height: 36px; font-size: 14px; }
+  .import-warning-close { min-width: 40px; min-height: 40px; }
+  .thumb-strip,
+  .selection-bar { height: 76px; }
+
+  /* iOS zooms the whole page into any focused field under 16px and doesn't
+     zoom back out, leaving the editor offset. */
+  input,
+  textarea,
+  select,
+  .text-input,
+  .command-search-input,
+  .project-name-input,
+  .custom-size-field input { font-size: 16px; }
+  .command-search-input { height: 44px; }
+}
+
+/* No hover on touch: anything revealed by :hover must simply be visible. */
+@media (hover: none) {
+  .project-del { opacity: 1; }
+  .project-open-hint { display: none; }
 }

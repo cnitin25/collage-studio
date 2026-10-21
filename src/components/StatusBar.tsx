@@ -1,4 +1,5 @@
 import { useEditorStore } from '../store/useEditorStore';
+import ModeToggles from './ModeToggles';
 
 function gcd(a: number, b: number): number {
   return b === 0 ? a : gcd(b, a % b);
@@ -48,6 +49,7 @@ export default function StatusBar() {
     <div className="status-bar">
       <span className="status-primary">{primary}</span>
       {secondary && <span className="status-secondary">{secondary}</span>}
+      <ModeToggles />
     </div>
   );
 }

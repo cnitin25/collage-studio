@@ -100,7 +100,7 @@ export async function exportImage(page: Page, format: 'png' | 'jpeg', scale: num
   await act(page, `s.setExportFormat('${format}'); s.setExportScale(${scale}); s.select(null)`);
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.locator('.toolbar-secondary button', { hasText: 'Export' }).click(),
+    page.locator('.toolbar-secondary').getByRole('button', { name: 'Export', exact: true }).click(),
   ]);
   return download;
 }
