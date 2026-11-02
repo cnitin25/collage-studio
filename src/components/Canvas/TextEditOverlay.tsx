@@ -30,6 +30,8 @@ export default function TextEditOverlay({ hostRef, getStage }: Props) {
 function InPlaceEditor({ item, hostRef, getStage }: Props & { item: TextItem }) {
   const updateItem = useEditorStore((s) => s.updateItem);
   const stopEditingText = useEditorStore((s) => s.stopEditingText);
+  // Re-render on zoom/pan so the field stays over its text.
+  useEditorStore((s) => `${s.viewScale},${s.viewX},${s.viewY}`);
 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [val, setVal] = useState(item.text);
@@ -41,6 +43,15 @@ function InPlaceEditor({ item, hostRef, getStage }: Props & { item: TextItem }) 
     }, 0);
     return () => clearTimeout(t);
   }, []);
+
+  // As tall as the text: a textarea defaults to two rows and the field hides
+  // its overflow, so a five-line text was edited through a two-line slot.
+  useLayoutEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${ta.scrollHeight}px`;
+  });
 
   const stage = getStage();
   const host = hostRef.current;
@@ -56,7 +67,9 @@ function InPlaceEditor({ item, hostRef, getStage }: Props & { item: TextItem }) 
   const top = containerRect.top - hostRect.top + abs.y;
 
   const commit = () => {
-    updateItem(item.id, { text: val.length ? val : ' ' });
+    // Unchanged text records nothing: no undo step, no "unsaved changes".
+    const text = val.length ? val : ' ';
+    if (text !== item.text) updateItem(item.id, { text });
     stopEditingText();
   };
 

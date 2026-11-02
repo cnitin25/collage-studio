@@ -63,6 +63,10 @@ interface EditorState {
   autoSaveEnabled: boolean;
   importFailures: ImageLoadFailure[];
   savedRef: SavedRef;
+  /** When the open project was last stored (ms), or null if it never was. */
+  lastSavedAt: number | null;
+  /** A slow operation in progress ("Adding photos… 2 of 5"), shown by App. */
+  busyMessage: string | null;
   // view state (not part of undo history)
   viewScale: number;
   viewX: number;
@@ -125,6 +129,8 @@ interface EditorState {
   setProjectName: (name: string) => void;
   flipItem: (id: string, axis: 'x' | 'y') => void;
   rotateItem: (id: string, deltaDeg: number) => void;
+  /** Move the selection by a few px (arrow keys); a run of nudges is one undo step. */
+  nudgeSelected: (dx: number, dy: number) => void;
   alignItems: (anchor: 'left' | 'center-x' | 'right' | 'top' | 'center-y' | 'bottom') => void;
   setView: (scale: number, x: number, y: number) => void;
   resetView: () => void;
@@ -134,8 +140,10 @@ interface EditorState {
   setLockAspectEnabled: (v: boolean) => void;
   setAutoSaveEnabled: (v: boolean) => void;
   setImportFailures: (failures: ImageLoadFailure[]) => void;
-  loadSerializedState: (state: SerializedState, id: string, name: string) => void;
+  setBusyMessage: (message: string | null) => void;
+  loadSerializedState: (state: SerializedState, id: string, name: string, savedAt?: number) => void;
   resetProject: () => void;
+  /** Record a completed save of `ref` (the state as it was when the save began). */
   markSaved: (ref: SavedRef) => void;
   cancelChange: () => void;
 
@@ -210,6 +218,27 @@ export function hasUnsavedChanges(s: SavedRef & { savedRef: SavedRef }): boolean
 }
 
 /**
+ * Auto-save's test: unsaved work, and also a saved collage that has since been
+ * emptied. hasUnsavedChanges ignores an empty canvas because it's never worth a
+ * prompt, but not storing one would bring a cleared collage back on the next
+ * visit.
+ */
+export function needsSaving(s: SavedRef & { savedRef: SavedRef }): boolean {
+  return hasUnsavedChanges(s) || (s.items.length === 0 && s.savedRef.items.length > 0);
+}
+
+const AUTO_SAVE_KEY = 'collage-studio-autosave';
+
+/** Auto-save is on unless the user switched it off — a choice kept across visits. */
+function storedAutoSave(): boolean {
+  try {
+    return localStorage.getItem(AUTO_SAVE_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+/**
  * After undo/redo, keep the selection (and crop mode) on any item that still
  * exists. Clearing it unconditionally unmounted every selection-dependent
  * panel: undoing an Enhance preset collapsed Enhance & Adjust out from under
@@ -222,6 +251,11 @@ function keepLiveSelection(s: { items: CollageItem[]; selectedId: string | null;
 }
 
 const INITIAL_ITEMS: CollageItem[] = [];
+
+/** Nudges this close together (ms) on the same item merge into one undo step. */
+const NUDGE_MERGE_MS = 1000;
+/** The last nudge's item, time, and the history snapshot it pushed. */
+let lastNudge: { id: string; at: number; snap: Snapshot } | null = null;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -316,7 +350,7 @@ export const useEditorStore = create<EditorState>()(
     snapEnabled: true,
     swapModeEnabled: true,
     lockAspectEnabled: false,
-    autoSaveEnabled: false,
+    autoSaveEnabled: storedAutoSave(),
     importFailures: [],
     savedRef: {
       items: INITIAL_ITEMS,
@@ -325,6 +359,8 @@ export const useEditorStore = create<EditorState>()(
       lastLayout: null,
       projectName: DEFAULT_PROJECT_NAME,
     },
+    lastSavedAt: null,
+    busyMessage: null,
     viewScale: 1,
     viewX: 0,
     viewY: 0,
@@ -708,6 +744,8 @@ export const useEditorStore = create<EditorState>()(
         s.futureLabels = [];
         const it = s.items.find((i) => i.id === selId);
         if (!it || it.type !== 'image') return;
+        // A frame is a solid border: left on 'glyph', Matte drew a ring of ✕s.
+        it.borderStyle = 'solid';
         it.borderWidth = preset.style.borderWidth;
         it.borderColor = preset.style.borderColor;
         it.cornerRadius = preset.style.cornerRadius;
@@ -1020,21 +1058,32 @@ export const useEditorStore = create<EditorState>()(
         s.lockAspectEnabled = v;
       }),
 
-    setAutoSaveEnabled: (v) =>
+    setAutoSaveEnabled: (v) => {
       set((s) => {
         s.autoSaveEnabled = v;
-      }),
+      });
+      try {
+        localStorage.setItem(AUTO_SAVE_KEY, v ? 'on' : 'off');
+      } catch {
+        // Storage blocked (private mode): the choice just lasts this session.
+      }
+    },
 
     setImportFailures: (failures) =>
       set((s) => {
         s.importFailures = failures;
       }),
 
+    setBusyMessage: (message) =>
+      set((s) => {
+        s.busyMessage = message;
+      }),
 
-    // Switching projects/history entirely discards the old past/future, so
-    // every blob: URL still held by the outgoing items is now unreachable —
-    // safe to revoke unconditionally against the freshly loaded items.
-    loadSerializedState: (state, id, name) => {
+
+    // Switching projects discards the old past/future; the blob: URL
+    // subscription at the bottom of this file then releases every URL only
+    // the outgoing project could show.
+    loadSerializedState: (state, id, name, savedAt) => {
       set((s) => {
         s.canvas = state.canvas;
         s.items = state.items;
@@ -1049,6 +1098,7 @@ export const useEditorStore = create<EditorState>()(
         s.historyLabels = [];
         s._pending = null;
         s.currentProjectId = id;
+        s.lastSavedAt = savedAt ?? null;
         renameProjectDraft(s, name);
       });
       set({ savedRef: savedRefOf(get()) });
@@ -1069,12 +1119,13 @@ export const useEditorStore = create<EditorState>()(
         s.historyLabels = [];
         s._pending = null;
         s.currentProjectId = uid('proj');
+        s.lastSavedAt = null;
         renameProjectDraft(s, DEFAULT_PROJECT_NAME);
       });
       set({ savedRef: savedRefOf(get()) });
     },
 
-    markSaved: (ref) => set({ savedRef: ref }),
+    markSaved: (ref) => set({ savedRef: ref, lastSavedAt: Date.now() }),
 
     // Drops a beginChange() snapshot without recording it — for a gesture that
     // turned out to change nothing (e.g. focusing a text field, then leaving).
@@ -1169,6 +1220,46 @@ export const useEditorStore = create<EditorState>()(
         it.y = cy - toCentreAfter.y;
         it.rotation = next;
       });
+    },
+
+    nudgeSelected: (dx, dy) => {
+      const st = get();
+      const id = st.selectedId;
+      if (!id || !st.items.some((i) => i.id === id)) return;
+      const now = performance.now();
+      const move = (s: Draft<EditorState>) => {
+        const it = s.items.find((i) => i.id === id);
+        if (it) {
+          it.x += dx;
+          it.y += dy;
+        }
+      };
+      // Holding an arrow key repeats ~30 times a second; a step each pushed
+      // every real action out of the 60-step history within two seconds. So
+      // a nudge extends the previous one's step while nothing else happened
+      // in between — the top of the history is still that nudge's snapshot.
+      const merge =
+        lastNudge !== null &&
+        lastNudge.id === id &&
+        now - lastNudge.at < NUDGE_MERGE_MS &&
+        st.past[st.past.length - 1] === lastNudge.snap &&
+        st.future.length === 0;
+      if (merge) {
+        set(move);
+        lastNudge!.at = now;
+        return;
+      }
+      const prev = snapshot(st);
+      set((s) => {
+        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
+        s.past.push(prev);
+        s.historyLabels.push('Move');
+        s.future = [];
+        s.futureLabels = [];
+        move(s);
+      });
+      const past = get().past;
+      lastNudge = { id, at: now, snap: past[past.length - 1] };
     },
 
     alignItems: (anchor) => {

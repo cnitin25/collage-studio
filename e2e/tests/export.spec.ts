@@ -115,9 +115,10 @@ test.describe('on a phone', () => {
     await page.locator('.inspector-close').click();
 
     const [download] = await Promise.all([page.waitForEvent('download'), page.locator('.toolbar-export').click()]);
+    // Checked before decoding the ~10 MP file below, which can outlast the toast.
+    await expect(page.locator('.toast')).toContainText('Exported at');
     const out = await imageStats(page, download);
     expect(out.width * out.height).toBeLessThanOrEqual(16_777_216);
     expect(out.width).toBeGreaterThan(1080 * 2); // as large as allowed, not dropped to 1×
-    await expect(page.locator('.toast')).toContainText('Exported at');
   });
 });

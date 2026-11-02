@@ -12,29 +12,46 @@ never leave your device.
   Photos larger than 4096 px on their long side are scaled down to 4096 on
   import (still sharp for every preset at 1×–2× export), and a batch is
   decoded two at a time — so a phone can hold a full collage of camera photos
-  without running out of memory.
-- **Layout** — Grid, Justified, and Mosaic auto-layout strategies with
-  ranked suggestions, plus manual free placement, resize, rotate, and drag-
-  to-swap. Outer margin, spacing, and per-cell padding are adjustable live.
-  Suggested layouts are ranked for the current photo order (layouts place
-  photos in order), so Shuffle re-ranks them — the panel says so.
+  without running out of memory. A slow import (a big batch, or HEIC, which
+  takes seconds per photo) shows its progress under the toolbar ("Adding
+  photos… 3 of 12"); a HEIC conversion that stalls is reported instead of
+  hanging.
+- **Layout** — Grid, Justified, Mosaic, Masonry and Spotlight auto-layout
+  strategies with ranked suggestions, plus manual free placement, resize,
+  rotate, and drag-to-swap. Outer margin, spacing, and per-cell padding are
+  adjustable live, and the spacing is the same between photos in every
+  direction (Masonry included). Suggested layouts are ranked for the current
+  photo order (layouts place photos in order), so Shuffle re-ranks them — the
+  panel says so.
 - **Per-photo editing** — crop (drag + zoom), brightness/contrast/
-  saturation/blur/warmth, one-click enhance presets (Brighten, Darken,
-  Antique, Vivid, Warm, Auto) with an adjustable strength, grayscale/sepia,
-  borders (solid/dashed/dotted/glyph) and frame presets, corner rounding,
-  clip shapes (rectangle/circle/oval/heart), and **replace photo** (swap in a
-  different image while keeping that item's position, size, crop, and style).
-  A photo keeps its crop zoom and framing when it's resized, swapped, or
-  reflowed by a layout/spacing change — and is cropped, never stretched, to a
-  new shape. Dragging a crop follows the pointer on flipped and rotated
-  photos too, and the 90° rotate buttons turn an item about its centre.
+  saturation/blur, **warmth** (colour temperature) and hue, one-click enhance
+  presets (Brighten, Darken, Antique, Vivid, Warm, Auto) with an adjustable
+  strength, grayscale/sepia, borders (solid/dashed/dotted/glyph) and frame
+  presets, corner rounding, clip shapes (rectangle/circle/oval/heart), and
+  **replace photo** (swap in a different image while keeping that item's
+  position, size, crop, and style).
+  - A photo keeps its crop zoom and framing when it's resized, swapped, or
+    reflowed by a layout/spacing change — and is cropped, never stretched, to
+    a new shape, including while a resize handle is still being dragged.
+  - Borders sit inside the photo, so the spacing between bordered photos
+    stays visible and a border at the canvas edge isn't cut in half.
+  - A photo's opacity shows what's behind it (its shadow fades with it).
+  - Moving an Adjust slider by hand takes over from a preset, so the
+    preset's Strength slider can't silently undo the adjustment.
+  - Dragging a crop follows the pointer on flipped and rotated photos too,
+    the 90° rotate buttons turn an item about its centre, and rotating with
+    the handle settles on 45° steps.
 - **Text & stickers** — editable text boxes with font/size/weight/color
-  controls (including bundled calligraphy fonts), and an emoji sticker
-  palette.
+  controls, and an emoji sticker palette. Every text font ships with the app
+  (Inter, Anton for Display, and four calligraphy fonts), so a collage's text
+  looks the same on every device. Resizing a text box rewraps it as you drag.
 - **Backgrounds** — solid color, gradient, image (with blur), or generated
-  pattern (dots/grid/stripes/checker).
+  pattern (dots/grid/stripes/checker). An uploaded background image is kept
+  — saves and exported files included — while another background type is
+  showing, so switching back finds it.
 - **Collage-wide styling** — a frame (corner radius + border) around the
-  whole canvas, independent of per-photo borders.
+  whole canvas, independent of per-photo borders; the border is its set width
+  all the way round, rounded corners included.
 - **Canvas sizing** — social-media presets (square, portrait, story,
   landscape, wide) and print presets (4×6, 5×7, 8×10, A4 at 300 DPI, portrait
   or landscape), or a custom pixel size. Each preset's icon is drawn at its
@@ -47,21 +64,40 @@ never leave your device.
   pinned there while the panels scroll. On a phone it's behind a search
   button in the Tools sheet's header, so it doesn't take room from the panels.
 - **Projects** — save/open/delete projects in the browser (IndexedDB),
-  each with a thumbnail; optional auto-save every 30s (only when something
-  changed), and also the moment the page is hidden — switching apps on a
-  phone, where the tab may never get another chance. After the first save
-  the app asks the browser for persistent storage; where Safari would still
-  clear the site after 7 days unused, the Projects dialog says so and suggests
-  Add to Home Screen or Export file. A project can also be exported to/imported from a single portable
-  `.json` file (photos and background image embedded) for backup or moving to
-  another browser/device.
+  each with a thumbnail. After the first save the app asks the browser for
+  persistent storage; where Safari would still clear the site after 7 days
+  unused, the Projects dialog says so and suggests Add to Home Screen or
+  Export file.
+  - **Auto-save is on by default**: every 30 s when something changed, and
+    the moment the page is hidden — switching apps on a phone, where the tab
+    may never get another chance. A cloud icon beside the project name shows
+    it (hover for when it last saved). Switched off, the icon becomes an
+    orange warning chip — one click turns it back on — and the choice is
+    remembered between visits.
+  - **The last project reopens** when you come back. If reopening it ever
+    crashed the editor, it isn't reopened again on the next visit; it waits
+    in Projects.
+  - Two open tabs saving at once can't delete each other's photos.
   - Opening another project, starting a new one, importing, or closing the tab
-    asks first if there are unsaved changes; deleting a project always asks.
+    asks first if there are unsaved changes (closing also asks while a save is
+    still being written); deleting a project always asks, and deleting the
+    open one closes it.
   - A save that fails (e.g. the browser's storage for the site is full) says
     so — it is never reported as "Saved" with photos missing.
   - Stored photos no saved project uses any more (deleted projects, replaced
     photos) are cleaned up automatically, so storage doesn't only ever grow.
   - Clear canvas doesn't ask first; it shows an **Undo** button instead.
+    Clearing a saved collage is saved too, so it doesn't come back.
+  - **Crash recovery**: if the editor ever crashes, unsaved work is stored as
+    a separate "(recovered)" project before you reload — never over the
+    original.
+- **Project files** — a project can also be exported to/imported from a
+  single portable `.json` file (photos and background image embedded) for
+  backup or moving to another browser/device. Only images embedded in the
+  file are opened: a file that points a photo at a web address can't make
+  the app fetch anything. A file from a newer version is refused with a
+  clear message, and anything in a damaged file that can't be drawn is left
+  out and listed rather than loaded half-broken.
 - **Export** — PNG or JPEG, at 1×/2×/3× the canvas resolution, with filtered
   photos rendered at full export resolution. On a phone, Export opens the
   share sheet (Save Image → Photos, or straight to a messaging app); desktop
@@ -71,17 +107,25 @@ never leave your device.
   areas outside a rounded collage frame come out white. The file name
   defaults to the project name (new projects are called "Collage") and
   follows it as you rename the project, until you type a file name of your own.
+  "Preparing image…" shows while a large export renders, and an export that
+  fails says why.
 - **Offline install (PWA)** — the built app installs and runs with no
   network connection.
+- **Locked down** — the site is served with a Content-Security-Policy (in
+  `vercel.json`) that only lets the page load scripts, images and data from
+  itself, so the "nothing leaves your device" promise is enforced by the
+  browser, not just by the code. `npm run preview` serves the same headers.
 - **Desktop toolbar** — icon buttons with tooltips (hover for the name and
   keyboard shortcut; ⌘ on a Mac). A disabled button's tooltip says what it
   needs ("select a photo first"). Between 769 and 1000 px wide, Duplicate,
   Delete, Clear canvas and the theme toggle move into a ⋯ menu so nothing
   runs off the edge.
 - **Phone layout** — below 768 px wide, and on phones held in landscape:
-  - the toolbar keeps Add photos, Undo/Redo, **Export**, Tools and a ⋯ menu
-    (Add text, Replace photo, Duplicate, Delete, Clear canvas, Projects,
-    Save, theme);
+  - the toolbar keeps the auto-save toggle, Add photos, Undo/Redo,
+    **Export**, Tools and a ⋯ menu (Add text, Replace photo, Duplicate,
+    Delete, Clear canvas, Projects, Save, theme — and Rename project below
+    480 px, where the name field is hidden), all fitting side by side down
+    to 360 px wide;
   - **Tools is a bottom sheet** at half height, with the canvas refitted into
     the space above so you can watch a slider's effect; drag or tap its
     header to expand, swipe it down to close. In landscape it's a side panel
@@ -117,13 +161,19 @@ never leave your device.
 - **Histogram** — live R/G/B value distribution for the whole selected
   photo, reflecting current crop/filter edits.
 - **Zoom & pan** — Ctrl+scroll or two-finger pinch zooms about the point
-  under the cursor/fingers (a pinch can start in the margin around the
-  canvas, and releasing one never selects what's under your fingers);
-  Space+drag pans.
+  under the cursor/fingers, in proportion to how far you scroll or pinch (a
+  pinch can start in the margin around the canvas, and releasing one never
+  selects what's under your fingers). Once zoomed, a plain scroll or
+  two-finger trackpad swipe pans (Shift+scroll sideways); Space+drag pans
+  too, even straight after clicking a toolbar button. Snapping reaches the
+  same distance on screen at any zoom.
 - **Undo/redo, keyboard shortcuts, dark/light theme.** Undo and redo keep the
   current selection (and the panel you're working in) whenever the selected
-  item still exists. A colour picker
-  session, a slider drag, or a text-box edit is one undo step each.
+  item still exists. A colour picker session, a slider drag, a text-box edit,
+  or a run of arrow-key nudges is one undo step each; opening a text box
+  without changing it records nothing. Editor shortcuts are off while the
+  Projects dialog is open — Escape closes it, and keyboard focus stays
+  inside it.
 
 ## Who it's for
 
@@ -172,23 +222,27 @@ src/
   store/
     useEditorStore.ts      canvas/items state, undo/redo, all editing actions
     useThemeStore.ts        dark/light theme, persisted to localStorage
-  layout/                  Grid / Justified / Mosaic layout algorithms
+  layout/                  Grid / Justified / Mosaic / Masonry / Spotlight layouts
   style/                   frame presets, enhance presets
-  storage/                 IndexedDB projects + assets, portable file import/export,
-                             persistent-storage request
+  storage/                 IndexedDB projects + assets (cross-tab save lock),
+                             portable file import/export, persistent-storage
+                             request; session.ts: reopen the last project,
+                             crash-loop guard, crash recovery copy
   hooks/                   useMediaQuery (+ the layout breakpoints), useReplacePhoto
   utils/                   image loading/downscaling, HEIC conversion, cropping,
-                             palette, export/share, platform detection
+                             palette, export/share, platform detection,
+                             importPhotos (import + progress), warmth filter
   components/
     StatusBar.tsx           selection/canvas info + the editor mode toggles
     ModeToggles.tsx         Snap / Lock layout / Swap / Lock ratio / Stay in crop
-    Toolbar.tsx             top bar — undo/redo, save/export, theme toggle;
-                             collapses secondary actions into an overflow
-                             menu on the phone layout
+    Toolbar.tsx             top bar — auto-save toggle, undo/redo, save/export,
+                             theme toggle; collapses secondary actions into an
+                             overflow menu on the phone layout
     SelectionBar.tsx        phone-only actions for the selected item
     ui/Icon.tsx             inline SVG icons (used on the phone layout)
     App.tsx                 dropzone, keyboard shortcuts, export/save wiring
-    ErrorBoundary.tsx        catches render crashes, offers a safe reload
+    ErrorBoundary.tsx        catches render crashes, saves a recovery copy of
+                             unsaved work, offers a safe reload
     Canvas/                  Konva stage and per-item node renderers
     panels/                  right-hand inspector — one collapsible panel per
                              feature area (a bottom sheet, or a side panel in
@@ -218,7 +272,20 @@ e2e/                        standalone Playwright project (its own
     export.spec.ts           export sharpness, blur at 1x vs 3x, JPEG corners;
                              phone share sheet, iOS canvas-size clamp
     export-filename.spec.ts  export file name following the project name
-    helpers.ts               store access, generated test images, image metrics
+    data-safety.spec.ts      auto-save default + toggle, reopening the last
+                             project, crash-loop guard, cross-tab saves, kept
+                             backgrounds, database repair, phone toolbar fit
+    rendering.spec.ts        frame and photo borders at full width and inside,
+                             opacity vs shadow, masonry gaps, frame presets
+    input.spec.ts            arrow-key undo, Projects dialog keyboard, Space
+                             pan, wheel/pinch zoom and pan, text editor height,
+                             presets vs hand-set sliders
+    project-files.spec.ts    import never fetches, newer/damaged files, export
+                             failure message, full round trip
+    polish.spec.ts           live resize crop/rewrap, rotation snaps, snap at
+                             any zoom, progress, warmth, fonts, crash recovery
+    helpers.ts               store access, generated test images, image metrics,
+                             export pixel analysis
 ```
 
 ## Known limitations
@@ -231,11 +298,23 @@ e2e/                        standalone Playwright project (its own
   after changing it — share sheet, keyboard behaviour and safe areas in
   particular can't be emulated.
 - The Playwright suite (`e2e/`) covers the mobile responsive layout,
-  project storage, cropping, the Insert panel, and export output; the rest
-  of the editor is verified manually plus TypeScript's compiler checks
-  (`npm run build`).
+  project storage and recovery, rendering/export output, input handling,
+  project files, cropping and the Insert panel; the rest of the editor is
+  verified manually plus TypeScript's compiler checks (`npm run build`).
 - Konva is split into its own vendor chunk (`vite.config.ts`) so app-code
   updates don't force a re-download of it, but it still loads on first
   visit since the canvas is needed immediately — there's no further win
   available from deferring it. HEIC decoding (`heic2any`, ~1.3MB) is
   already lazy-loaded and only fetched the first time a HEIC file is used.
+- heic2any converts in a worker that evaluates code from strings, so the
+  Content-Security-Policy has to allow `'unsafe-eval'`. Scripts can still
+  only come from the site itself; a WASM-based decoder would remove the need.
+- Stickers are emoji, drawn with each device's own emoji font, so they look
+  different on Apple, Android and Windows. The Serif and Mono text fonts are
+  system fonts too (Georgia / Courier New, with fallbacks); every other text
+  font is bundled.
+- The stage is exactly the canvas's size, so a handle that falls outside it
+  can't be reached — notably the rotate handle of a photo that touches the
+  top of the canvas. Use the 90° rotate buttons for those.
+- One item is selected at a time: no multi-select, grouping, or aligning
+  items to each other.

@@ -18,8 +18,12 @@ export default function EnhancePresetsPanel() {
   const sel = items.find((i) => i.id === selectedId);
   if (!sel || sel.type !== 'image') return null;
 
+  // A value set by hand ends the preset: its Strength slider recomputes every
+  // value from the recipe, which would silently throw this adjustment away.
   const setLive = (patch: Partial<NonNullable<typeof sel.filters>>) =>
-    updateItemLive(sel.id, { filters: { ...sel.filters, ...patch } });
+    updateItemLive(sel.id, {
+      filters: { ...sel.filters, ...patch, presetId: undefined, presetStrength: undefined },
+    });
 
   const f = sel.filters ?? {};
   const activePreset = f.presetId;
@@ -31,6 +35,7 @@ export default function EnhancePresetsPanel() {
     f.contrast ||
     f.saturation ||
     f.hue ||
+    f.warmth ||
     f.enhance ||
     f.grayscale ||
     f.sepia ||
@@ -122,6 +127,7 @@ export default function EnhancePresetsPanel() {
       <div className="sliders">
         <Slider
           label="Brightness"
+          suffix=""
           value={f.brightness ?? 0}
           min={-100}
           max={100}
@@ -131,6 +137,7 @@ export default function EnhancePresetsPanel() {
         />
         <Slider
           label="Contrast"
+          suffix=""
           value={f.contrast ?? 0}
           min={-100}
           max={100}
@@ -140,6 +147,7 @@ export default function EnhancePresetsPanel() {
         />
         <Slider
           label="Saturation"
+          suffix=""
           value={f.saturation ?? 0}
           min={-100}
           max={100}
@@ -148,7 +156,18 @@ export default function EnhancePresetsPanel() {
           onEnd={commitChange}
         />
         <Slider
-          label="Warmth (hue)"
+          label="Warmth"
+          suffix=""
+          value={f.warmth ?? 0}
+          min={-100}
+          max={100}
+          onStart={() => beginChange('Warmth')}
+          onChange={(v) => setLive({ warmth: v })}
+          onEnd={commitChange}
+        />
+        <Slider
+          label="Hue"
+          suffix="°"
           value={f.hue ?? 0}
           min={-180}
           max={180}

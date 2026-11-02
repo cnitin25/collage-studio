@@ -1,6 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import vercel from './vercel.json';
+
+// `npm run preview` serves the production build with the same security
+// headers (CSP included) as Vercel, so a policy problem shows up locally
+// rather than in production. vercel.json stays the one place they're defined.
+const securityHeaders = Object.fromEntries(
+  (vercel.headers.find((rule) => rule.source === '/(.*)')?.headers ?? []).map((h) => [h.key, h.value]),
+);
 
 export default defineConfig({
   plugins: [
@@ -29,6 +37,7 @@ export default defineConfig({
     }),
   ],
   server: { port: 5173, open: true },
+  preview: { headers: securityHeaders },
   build: {
     rollupOptions: {
       output: {

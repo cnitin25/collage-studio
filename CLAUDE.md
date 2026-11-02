@@ -48,6 +48,15 @@ specific to working here with Claude Code, or worth calling out twice.
   after touching `Toolbar.tsx`, `InspectorPanel.tsx`, `SelectionBar.tsx`, the
   responsive CSS, or `CanvasStage.tsx`'s pan/zoom handling, and for a visual
   check screenshot it with Playwright at 390x844 and 844x390.
+- The dev server sends no Content-Security-Policy; production does
+  (`vercel.json`), and `npm run preview` serves the same headers. Anything
+  that loads a new kind of resource (a font, a worker, an image or fetch
+  source) can work in `npm run dev` and break in production — check
+  `npm run build && npm run preview` for CSP violations in the console.
+- Auto-save is on by default and the last project reopens on load. An e2e
+  spec that needs "nothing saved" must switch auto-save off first
+  (`s.setAutoSaveEnabled(false)`), and one that reloads gets the last saved
+  project back.
 - `README.md` is the user-facing feature list and is expected to stay
   accurate as features ship — update it alongside `AGENTS.md` when adding or
   removing a feature, not just when asked to "update the docs."

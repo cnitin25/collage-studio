@@ -50,6 +50,13 @@ export default function TextNode({
       onDblTap={onStartEdit}
       onDragMove={(e) => onNodeDragMove(item.id, e.target)}
       onDragEnd={(e) => onNodeDragEnd(item.id, e.target)}
+      // Rewrap as the box is dragged: left scaled, the glyphs were squashed or
+      // stretched until release, then jumped to the new wrapping.
+      onTransform={() => {
+        const node = ref.current;
+        if (!node) return;
+        node.setAttrs({ width: Math.max(20, node.width() * node.scaleX()), scaleX: 1, scaleY: 1 });
+      }}
       onTransformEnd={() => {
         const node = ref.current;
         if (!node) return;

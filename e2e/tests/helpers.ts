@@ -5,17 +5,27 @@ import type { Download, Page } from '@playwright/test';
 // is exposed as window.__editorStore in dev builds only (see src/main.tsx),
 // which is what `npm run test:e2e` runs against.
 
-export type ImageKind = 'photo' | 'checker' | 'redblue';
+export type ImageKind = 'photo' | 'checker' | 'redblue' | 'solid';
 
-/** Draw a test image in the page and add it to the canvas. Returns its item id. */
-export async function addImage(page: Page, kind: ImageKind = 'photo', w = 1200, h = 900): Promise<string> {
+/** Draw a test image in the page and add it to the canvas. Returns its item id.
+ *  `fill` is the colour of a 'solid' image. */
+export async function addImage(
+  page: Page,
+  kind: ImageKind = 'photo',
+  w = 1200,
+  h = 900,
+  fill = '#00ff00',
+): Promise<string> {
   return page.evaluate(
-    async ({ kind, w, h }) => {
+    async ({ kind, w, h, fill }) => {
       const c = document.createElement('canvas');
       c.width = w;
       c.height = h;
       const ctx = c.getContext('2d')!;
-      if (kind === 'checker') {
+      if (kind === 'solid') {
+        ctx.fillStyle = fill;
+        ctx.fillRect(0, 0, w, h);
+      } else if (kind === 'checker') {
         // 1px checkerboard: maximum fine detail, so any resampling blur shows.
         const img = ctx.createImageData(w, h);
         for (let y = 0; y < h; y++)
@@ -48,8 +58,44 @@ export async function addImage(page: Page, kind: ImageKind = 'photo', w = 1200, 
       const items = store.getState().items;
       return items[items.length - 1].id as string;
     },
-    { kind, w, h },
+    { kind, w, h, fill },
   );
+}
+
+/** Pixel accessor handed to an analyzeExport() callback: [r, g, b, a] at (x, y). */
+export type Px = (x: number, y: number) => [number, number, number, number];
+
+/**
+ * Decode a downloaded image in the page and run `analyze` over its pixels
+ * there, returning only the result — a whole image's pixels are far too many
+ * to ship back to the test. `analyze` is serialised, so it may only use its
+ * arguments — pass anything else from the test in `arg`.
+ */
+export async function analyzeExport<T, A = undefined>(
+  page: Page,
+  download: Download,
+  analyze: (px: Px, width: number, height: number, arg: A) => T,
+  arg?: A,
+): Promise<T> {
+  const b64 = readFileSync((await download.path())!).toString('base64');
+  return page.evaluate(
+    async ({ b64, src, arg }) => {
+      const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+      const bmp = await createImageBitmap(new Blob([bytes]));
+      const c = document.createElement('canvas');
+      c.width = bmp.width;
+      c.height = bmp.height;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(bmp, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      const px = (x: number, y: number) => {
+        const i = (Math.round(y) * c.width + Math.round(x)) * 4;
+        return [d[i], d[i + 1], d[i + 2], d[i + 3]];
+      };
+      return new Function('px', 'w', 'h', 'arg', `return (${src})(px, w, h, arg);`)(px, c.width, c.height, arg);
+    },
+    { b64, src: analyze.toString(), arg },
+  ) as Promise<T>;
 }
 
 /** Run an expression against the store's current state: `s` is getState(). */
@@ -65,25 +111,29 @@ export function act(page: Page, body: string): Promise<void> {
 /** Keys currently in one of the app's IndexedDB object stores. */
 export function idbKeys(page: Page, storeName: 'projects' | 'assets'): Promise<string[]> {
   return page.evaluate(
-    (storeName) =>
-      new Promise<string[]>((resolve, reject) => {
-        const req = indexedDB.open('collage-studio');
-        req.onerror = () => reject(req.error);
-        req.onsuccess = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains(storeName)) {
-            db.close();
-            resolve([]);
-            return;
-          }
-          const keysReq = db.transaction(storeName).objectStore(storeName).getAllKeys();
-          keysReq.onsuccess = () => {
-            db.close();
-            resolve(keysReq.result as string[]);
-          };
-          keysReq.onerror = () => reject(keysReq.error);
-        };
-      }),
+    async (storeName) =>
+      // Opening a database that doesn't exist yet would create it — empty,
+      // ahead of the app's own first open. Look it up first.
+      !(await indexedDB.databases()).some((d) => d.name === 'collage-studio')
+        ? []
+        : new Promise<string[]>((resolve, reject) => {
+            const req = indexedDB.open('collage-studio');
+            req.onerror = () => reject(req.error);
+            req.onsuccess = () => {
+              const db = req.result;
+              if (!db.objectStoreNames.contains(storeName)) {
+                db.close();
+                resolve([]);
+                return;
+              }
+              const keysReq = db.transaction(storeName).objectStore(storeName).getAllKeys();
+              keysReq.onsuccess = () => {
+                db.close();
+                resolve(keysReq.result as string[]);
+              };
+              keysReq.onerror = () => reject(keysReq.error);
+            };
+          }),
     storeName,
   );
 }

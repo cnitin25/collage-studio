@@ -1,20 +1,37 @@
 import { openDB, type IDBPDatabase } from 'idb';
 
+const NAME = 'collage-studio';
+const STORES = ['projects', 'assets'] as const;
+
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
-function db(): Promise<IDBPDatabase> {
-  if (!dbPromise) {
-    dbPromise = openDB('collage-studio', 1, {
-      upgrade(d) {
-        if (!d.objectStoreNames.contains('projects')) {
-          d.createObjectStore('projects', { keyPath: 'id' });
-        }
-        if (!d.objectStoreNames.contains('assets')) {
-          d.createObjectStore('assets', { keyPath: 'id' });
-        }
-      },
-    });
+function createStores(d: IDBPDatabase) {
+  for (const name of STORES) {
+    if (!d.objectStoreNames.contains(name)) d.createObjectStore(name, { keyPath: 'id' });
   }
+}
+
+/**
+ * Open the database at whatever version it is, creating the stores on first
+ * use. A database that exists without them — created by an interrupted first
+ * run, a browser tool, or anything else that opened it first — would fail
+ * every save, so it's upgraded one version to add them. (A future schema
+ * change needs an explicit version and migration of its own.)
+ */
+async function open(): Promise<IDBPDatabase> {
+  const d = await openDB(NAME, undefined, { upgrade: createStores });
+  if (STORES.every((name) => d.objectStoreNames.contains(name))) return d;
+  const version = d.version + 1;
+  d.close();
+  return openDB(NAME, version, { upgrade: createStores });
+}
+
+function db(): Promise<IDBPDatabase> {
+  // A failed open isn't kept: the next call tries again.
+  dbPromise ??= open().catch((err) => {
+    dbPromise = null;
+    throw err;
+  });
   return dbPromise;
 }
 

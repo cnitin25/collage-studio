@@ -6,6 +6,7 @@ export const NEUTRAL_FILTERS: ImageFilters = {
   saturation: 0,
   blur: 0,
   hue: 0,
+  warmth: 0,
   enhance: 0,
   grayscale: false,
   sepia: false,
@@ -17,15 +18,14 @@ export const NEUTRAL_FILTERS: ImageFilters = {
 export const DEFAULT_PRESET_STRENGTH = 60;
 
 // Values are in the same UI units as the Adjust panel sliders, and represent
-// the FULL (100%) strength version of each look.
-// Hue sign was verified numerically against Konva's actual HSL matrix:
-// negative hue shifts warmer (more red, less blue), positive shifts cooler.
+// the FULL (100%) strength version of each look. Warm uses colour temperature,
+// not hue: rotating every hue to warm a photo also shifted its blues and greens.
 export const ENHANCE_PRESETS: { id: EnhancePresetId; label: string; filters: ImageFilters }[] = [
   { id: 'brighten', label: 'Brighten', filters: { ...NEUTRAL_FILTERS, brightness: 35, contrast: 5 } },
   { id: 'darken', label: 'Darken', filters: { ...NEUTRAL_FILTERS, brightness: -35, contrast: 5 } },
   { id: 'antique', label: 'Antique', filters: { ...NEUTRAL_FILTERS, brightness: -5, contrast: -10, sepia: true } },
   { id: 'vivid', label: 'Vivid', filters: { ...NEUTRAL_FILTERS, brightness: 5, contrast: 20, saturation: 55 } },
-  { id: 'warm', label: 'Warm', filters: { ...NEUTRAL_FILTERS, brightness: 3, saturation: 15, hue: 12 } },
+  { id: 'warm', label: 'Warm', filters: { ...NEUTRAL_FILTERS, brightness: 3, saturation: 10, warmth: 45 } },
   {
     id: 'auto',
     label: 'Auto Enhance',
@@ -42,7 +42,7 @@ export const ENHANCE_PRESETS: { id: EnhancePresetId; label: string; filters: Ima
   },
 ];
 
-const NUMERIC_KEYS = ['brightness', 'contrast', 'saturation', 'hue', 'enhance'] as const;
+const NUMERIC_KEYS = ['brightness', 'contrast', 'saturation', 'hue', 'warmth', 'enhance'] as const;
 
 /**
  * Scale a preset's numeric fields by strengthPct (0..100) of its full recipe.

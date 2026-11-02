@@ -10,6 +10,7 @@
   /* Single warm accent — selection, primary actions */
   --accent: #ff7a59;
   --accent-press: #ec6643;
+  --ok: #2dba78;
   --radius: 10px;
   --radius-sm: 7px;
 
@@ -41,6 +42,7 @@
   --text: #1a1d24;
   --muted: #5b6272;
   --muted-dim: #838a99;
+  --ok: #1d9a5f;
 
   --hover-bg: #e9ebf0;
   --hover-border: #ccd1db;
@@ -150,6 +152,25 @@ button {
 .brand { min-width: 0; }
 .project-name-input { min-width: 0; }
 
+/* Auto-save toggle beside the project name: quiet while on, a warning chip
+   while off — the one state where closing the app can lose work. The .btn
+   prefix outranks .btn / .btn-ghost (declared further down), hover included. */
+.btn.autosave-toggle { flex-shrink: 0; border-color: transparent; }
+.btn.autosave-toggle.is-on,
+.btn.autosave-toggle.is-on:hover:not(:disabled) { color: var(--ok); }
+.btn.autosave-toggle.is-off {
+  color: var(--accent);
+  background: rgba(255, 122, 89, 0.12);
+  border-color: rgba(255, 122, 89, 0.45);
+}
+.btn.autosave-toggle.is-off:hover:not(:disabled) {
+  color: var(--accent);
+  background: rgba(255, 122, 89, 0.2);
+  border-color: rgba(255, 122, 89, 0.6);
+}
+/* Phones only (see the 480px block): the name field it stands in for is hidden. */
+.overflow-menu .menu-rename { display: none; }
+
 /* Tooltips for [data-tip], on devices that can hover. Faster than the native
    title tooltip (which is why ToolButton doesn't set title), and themed. */
 @media (hover: hover) {
@@ -186,6 +207,10 @@ button {
   [data-tip][data-tip-align='end']::after { left: auto; right: 0; transform: translateY(-3px); }
   [data-tip][data-tip-align='end']:hover::after,
   [data-tip][data-tip-align='end']:focus-visible::after { transform: none; }
+  /* Near the left edge: grow rightwards. */
+  [data-tip][data-tip-align='start']::after { left: 0; transform: translateY(-3px); }
+  [data-tip][data-tip-align='start']:hover::after,
+  [data-tip][data-tip-align='start']:focus-visible::after { transform: none; }
   /* Not over a menu the button has just opened. */
   [data-tip][aria-expanded='true']::after { display: none; }
 }
@@ -957,6 +982,42 @@ button {
   gap: 12px;
 }
 
+/* A slow operation in progress (adding photos, preparing an export): a pill
+   under the toolbar, clear of the toast at the bottom. */
+.busy-indicator {
+  position: fixed;
+  top: calc(66px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 10px 28px -10px var(--shadow-color);
+  pointer-events: none;
+}
+.busy-spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: busy-spin 0.8s linear infinite;
+}
+@keyframes busy-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .busy-spinner { animation-duration: 2.4s; }
+}
+
 /* Error messages are sentences, not a one-word pill — let them wrap. */
 .toast.is-error {
   background: #d9483b;
@@ -988,6 +1049,7 @@ button {
   z-index: 40;
   padding: 24px;
 }
+.modal:focus { outline: none; } /* the dialog itself; its controls keep their focus rings */
 .modal {
   width: min(760px, 100%);
   max-height: 80vh;
@@ -1593,6 +1655,8 @@ button {
   }
 
   .brand { flex: 0 1 auto; min-width: 0; }
+  /* Decorative: its room goes to the auto-save toggle. */
+  .brand-mark { display: none; }
   .project-name-input {
     width: auto;
     max-width: 34vw;
@@ -1916,8 +1980,18 @@ button {
   .project-name-input { width: 160px; }
 }
 
-@media (max-width: 400px) {
+/* Narrow phones: beside the toolbar's buttons and the auto-save toggle, the
+   name field would be a sliver a few letters wide. Renaming moves into the ⋯
+   menu instead. */
+@media (max-width: 480px) {
   .project-name-input { display: none; }
+  .overflow-menu .menu-rename { display: flex; }
+}
+
+@media (max-width: 400px) {
+  /* 360 px phones: seven buttons and the auto-save toggle, none overlapping. */
+  .toolbar { padding: 0 8px; }
+  .toolbar-actions { gap: 2px; }
   .status-secondary { display: none; }
   .toolbar-export-label { display: none; }
   .project-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
@@ -1939,7 +2013,8 @@ button {
   /* (the phone sheet's stacked toggles keep their own, more specific sizing) */
   .mode-toggle { height: 36px; padding: 0 12px; font-size: 12px; }
   .btn { height: 44px; }
-  .toolbar-actions .btn { min-width: 44px; }
+  .toolbar-actions .btn,
+  .autosave-toggle { min-width: 44px; }
   .chip { height: 40px; }
   .slider-step-btn { width: 36px; height: 36px; font-size: 18px; }
   .slider-row { gap: 8px; }

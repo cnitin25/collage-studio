@@ -29,9 +29,9 @@ export interface ImageFilters {
   contrast?: number; // -100..100    (Phase 3)
   saturation?: number; // -100..100  (Phase 3)
   blur?: number; // 0..40 px         (Phase 3)
-  hue?: number; // -180..180, UI convention: POSITIVE = warmer. Negated at
-  // render time since Konva's own hue property runs the opposite direction
-  // (verified numerically against its HSL matrix — see ImageNode.tsx).
+  hue?: number; // -180..180, a hue rotation. Negated at render time, since
+  // Konva's own hue property runs the opposite way to the UI's slider.
+  warmth?: number; // -100..100, colour temperature (positive = warmer); utils/warmth
   enhance?: number; // 0..100, Konva's auto-enhance strength (v2)
   grayscale?: boolean; // mutually exclusive with sepia (v2)
   sepia?: boolean; // mutually exclusive with grayscale (v2)

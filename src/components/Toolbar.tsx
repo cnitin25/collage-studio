@@ -12,6 +12,7 @@ interface Props {
   onSave: () => void;
   onOpenProjects: () => void;
   onClearCanvas: () => void;
+  onToggleAutoSave: () => void;
   toolsOpen: boolean;
   onToggleTools: () => void;
 }
@@ -23,8 +24,10 @@ type ToolButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   /** Accessible name; also the tooltip unless `tip` says more. */
   label: string;
   tip?: string;
-  /** Right-align the tooltip, for buttons near the window's right edge. */
+  /** Anchor the tooltip to the button's right / left edge, for buttons near
+   *  the window's right / left edge. */
   tipEnd?: boolean;
+  tipStart?: boolean;
 };
 
 /**
@@ -32,13 +35,13 @@ type ToolButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
  * get it from the CSS tooltip (`data-tip`, see index.css), which replaces the
  * slower native `title` tooltip — so no `title` here, or both would show.
  */
-function ToolButton({ icon, label, tip, tipEnd, className = '', ...rest }: ToolButtonProps) {
+function ToolButton({ icon, label, tip, tipEnd, tipStart, className = '', ...rest }: ToolButtonProps) {
   return (
     <button
       className={`btn icon-btn ${className}`}
       aria-label={label}
       data-tip={tip ?? label}
-      data-tip-align={tipEnd ? 'end' : undefined}
+      data-tip-align={tipEnd ? 'end' : tipStart ? 'start' : undefined}
       {...rest}
     >
       <Icon name={icon} />
@@ -53,6 +56,7 @@ export default function Toolbar({
   onSave,
   onOpenProjects,
   onClearCanvas,
+  onToggleAutoSave,
   toolsOpen,
   onToggleTools,
 }: Props) {
@@ -66,6 +70,8 @@ export default function Toolbar({
   const itemCount = useEditorStore((s) => s.items.length);
   const projectName = useEditorStore((s) => s.projectName);
   const setProjectName = useEditorStore((s) => s.setProjectName);
+  const autoSave = useEditorStore((s) => s.autoSaveEnabled);
+  const lastSavedAt = useEditorStore((s) => s.lastSavedAt);
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
   const replace = useReplacePhoto();
@@ -99,6 +105,11 @@ export default function Toolbar({
   };
 
   const themeLabel = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  const savedAt =
+    lastSavedAt && new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const autoSaveTip = autoSave
+    ? `Auto-save on${savedAt ? ` · saved ${savedAt}` : ''} — click to turn off`
+    : 'Auto-save off — click to turn it on';
 
   return (
     <header className="toolbar">
@@ -110,6 +121,18 @@ export default function Toolbar({
           spellCheck={false}
           onChange={(e) => setProjectName(e.target.value)}
           aria-label="Project name"
+        />
+        {/* Next to the name, where save status lives in document apps, and on
+            every layout: switched off, it's the only sign that closing the
+            app can lose work. */}
+        <ToolButton
+          className={`btn-ghost autosave-toggle ${autoSave ? 'is-on' : 'is-off'}`}
+          icon={autoSave ? 'cloudCheck' : 'cloudOff'}
+          label="Auto-save"
+          tip={autoSaveTip}
+          tipStart
+          aria-pressed={autoSave}
+          onClick={onToggleAutoSave}
         />
       </div>
 
@@ -255,6 +278,18 @@ export default function Toolbar({
                 <Icon name="eraser" /> Clear canvas
               </button>
               <div className="overflow-sep" role="separator" />
+              <button
+                className="overflow-item menu-rename"
+                role="menuitem"
+                onClick={() =>
+                  runFromMenu(() => {
+                    const name = window.prompt('Project name', projectName);
+                    if (name?.trim()) setProjectName(name.trim());
+                  })
+                }
+              >
+                <Icon name="edit" /> Rename project…
+              </button>
               <button className="overflow-item menu-compact" role="menuitem" onClick={() => runFromMenu(onOpenProjects)}>
                 <Icon name="folder" /> Projects
               </button>

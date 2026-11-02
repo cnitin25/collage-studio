@@ -3,6 +3,7 @@ import { useEditorStore } from '../../store/useEditorStore';
 import type { BackgroundType, CollageItem, PatternKind } from '../../types';
 import { extractPalette } from '../../utils/palette';
 import { loadImageFile } from '../../utils/loadImage';
+import { withBusy } from '../../utils/importPhotos';
 import { uid } from '../../utils/id';
 import Slider from '../ui/Slider';
 import ColorInput from '../ui/ColorInput';
@@ -84,7 +85,7 @@ export default function BackgroundPanel() {
     e.target.value = '';
     if (!file) return;
     try {
-      const loaded = await loadImageFile(file);
+      const loaded = await withBusy('Adding image…', () => loadImageFile(file));
       setBackground({
         backgroundType: 'image',
         backgroundImageSrc: loaded.src,
@@ -162,7 +163,9 @@ export default function BackgroundPanel() {
               {photos.map((p) => (
                 <button
                   key={p.id}
-                  className={`bg-thumb ${canvas.backgroundImageSrc === p.src ? 'is-active' : ''}`}
+                  // By asset, not URL: a reopened project gives the background
+                  // its own object URL for the same stored photo.
+                  className={`bg-thumb ${p.assetId && canvas.backgroundAssetId === p.assetId ? 'is-active' : ''}`}
                   onClick={() =>
                     setBackground({
                       backgroundType: 'image',

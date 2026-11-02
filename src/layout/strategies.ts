@@ -158,30 +158,41 @@ export function masonryLayout(aspects: number[], opts: LayoutOptions, cols?: num
   const c = Math.min(n, Math.max(1, cols ?? Math.round(Math.sqrt(n))));
   const colW = min1((contentW - (c - 1) * g) / c);
   const colHeights = new Array(c).fill(0);
-
-  const rects: Rect[] = new Array(n);
+  const column: number[] = new Array(n);
+  const naturalH: number[] = new Array(n);
   for (let i = 0; i < n; i++) {
     let col = 0;
     for (let k = 1; k < c; k++) {
       if (colHeights[k] < colHeights[col]) col = k;
     }
-    const h = colW / Math.max(0.0001, aspects[i]);
-    rects[i] = {
-      x: opts.margin + col * (colW + g),
-      y: opts.margin + colHeights[col],
-      width: colW,
-      height: h,
-    };
-    colHeights[col] += h + g;
+    column[i] = col;
+    naturalH[i] = colW / Math.max(0.0001, aspects[i]);
+    colHeights[col] += naturalH[i] + g;
   }
 
-  const maxColHeight = Math.max(...colHeights.map((h) => h - g));
-  const availH = contentH;
-  const scaleY = maxColHeight > 0 ? availH / maxColHeight : 1;
-  rects.forEach((r) => {
-    r.y = opts.margin + (r.y - opts.margin) * scaleY;
-    r.height = min1(r.height * scaleY);
-  });
+  // Fit the tallest column to the canvas by scaling the photos' heights only.
+  // Scaling whole positions stretched or squeezed the gaps along with them,
+  // so a column's gaps stopped matching the spacing across columns.
+  const photoH = new Array(c).fill(0);
+  const count = new Array(c).fill(0);
+  for (let i = 0; i < n; i++) {
+    photoH[column[i]] += naturalH[i];
+    count[column[i]]++;
+  }
+  let scaleY = Infinity;
+  for (let k = 0; k < c; k++) {
+    if (count[k] > 0) scaleY = Math.min(scaleY, (contentH - (count[k] - 1) * g) / photoH[k]);
+  }
+  scaleY = Number.isFinite(scaleY) ? Math.max(scaleY, 0.0001) : 1;
+
+  const nextY = new Array(c).fill(opts.margin);
+  const rects: Rect[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const col = column[i];
+    const h = min1(naturalH[i] * scaleY);
+    rects[i] = { x: opts.margin + col * (colW + g), y: nextY[col], width: colW, height: h };
+    nextY[col] += h + g;
+  }
   return rects;
 }
 

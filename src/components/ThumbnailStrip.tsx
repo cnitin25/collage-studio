@@ -1,6 +1,6 @@
 import { useEditorStore } from '../store/useEditorStore';
 import type { ImageItem } from '../types';
-import { loadImageFiles } from '../utils/loadImage';
+import { importPhotos } from '../utils/importPhotos';
 
 interface Props {
   /**
@@ -16,8 +16,6 @@ export default function ThumbnailStrip({ keepSlot = false }: Props) {
   const items = useEditorStore((s) => s.items);
   const selectedId = useEditorStore((s) => s.selectedId);
   const select = useEditorStore((s) => s.select);
-  const addImages = useEditorStore((s) => s.addImages);
-  const setImportFailures = useEditorStore((s) => s.setImportFailures);
 
   const photos = items.filter((it): it is ImageItem => it.type === 'image');
   if (photos.length === 0 && !(keepSlot && items.length > 0)) return null;
@@ -27,11 +25,8 @@ export default function ThumbnailStrip({ keepSlot = false }: Props) {
     input.type = 'file';
     input.multiple = true;
     input.accept = 'image/*';
-    input.onchange = async () => {
-      if (!input.files?.length) return;
-      const { images, failures } = await loadImageFiles(Array.from(input.files!));
-      if (images.length) addImages(images);
-      setImportFailures(failures);
+    input.onchange = () => {
+      if (input.files?.length) void importPhotos(Array.from(input.files));
     };
     input.click();
   };

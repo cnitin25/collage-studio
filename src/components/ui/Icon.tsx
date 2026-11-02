@@ -35,6 +35,8 @@ const PATHS = {
   check: 'M5 12l5 5 9-10',
   expand: 'M6 15l6-6 6 6',
   collapse: 'M6 9l6 6 6-6',
+  cloudCheck: 'M6.5 18h11a3.5 3.5 0 0 0 0-7 5.5 5.5 0 0 0-10.9.5A3.25 3.25 0 0 0 6.5 18zM9.5 14.5l2 2 3.5-4',
+  cloudOff: 'M6.5 18h11a3.5 3.5 0 0 0 0-7 5.5 5.5 0 0 0-10.9.5A3.25 3.25 0 0 0 6.5 18zM4 4l16 16',
 } as const;
 
 export type IconName = keyof typeof PATHS;

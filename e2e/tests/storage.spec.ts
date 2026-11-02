@@ -158,6 +158,7 @@ test('hiding the page saves pending work when auto-save is on', async ({ page })
 });
 
 test('hiding the page saves nothing when auto-save is off', async ({ page }) => {
+  await act(page, 's.setAutoSaveEnabled(false)'); // on by default
   await addImage(page);
   await hidePage(page);
   await page.waitForTimeout(500);

@@ -21,7 +21,21 @@ if (import.meta.env.DEV) {
 // (CanvasStage's exportDataURL), and blur radii already scale by this value.
 Konva.pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
 
-// Bundled script/calligraphy fonts (offline). Imported for side effects.
+// Bundled text fonts (offline), so a collage looks the same on every device —
+// Inter and Impact used to be whatever the system had, and phones have
+// neither. Latin subsets only for the two new ones: every woff2 is precached
+// for offline use, and other scripts fall back to system fonts per character.
+// Imported for side effects.
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-ext-400.css';
+import '@fontsource/inter/latin-700.css';
+import '@fontsource/inter/latin-ext-700.css';
+import '@fontsource/inter/latin-400-italic.css';
+import '@fontsource/inter/latin-ext-400-italic.css';
+import '@fontsource/inter/latin-700-italic.css';
+import '@fontsource/inter/latin-ext-700-italic.css';
+import '@fontsource/anton/latin-400.css';
+import '@fontsource/anton/latin-ext-400.css';
 import '@fontsource/pacifico/400.css';
 import '@fontsource/dancing-script/400.css';
 import '@fontsource/dancing-script/700.css';

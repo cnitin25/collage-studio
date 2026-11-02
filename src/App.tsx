@@ -15,13 +15,15 @@ import {
   DEFAULT_PROJECT_NAME,
   fileNameForProject,
   hasUnsavedChanges,
+  needsSaving,
   savedRefOf,
 } from './store/useEditorStore';
 import { useThemeStore } from './store/useThemeStore';
-import { loadImageFiles } from './utils/loadImage';
+import { importPhotos } from './utils/importPhotos';
 import { canvasToBlob, maxExportScale, shareOrDownload } from './utils/exportStage';
-import { saveProject } from './storage/projects';
+import { saveProject, type SaveResult } from './storage/projects';
 import { requestPersistentStorage } from './storage/persistence';
+import { confirmRestore, rememberProject, restoreLastProject } from './storage/session';
 import Icon from './components/ui/Icon';
 
 function describeSaveError(err: unknown): string {
@@ -31,19 +33,29 @@ function describeSaveError(err: unknown): string {
   return err instanceof Error && err.message ? err.message : 'an unknown storage error.';
 }
 
+/** Saves still writing: leaving the page now could lose them (see beforeunload). */
+let savesInFlight = 0;
+
 /** Save the editor's current state; marks it saved only once it's safely stored. */
 async function saveCurrent(thumbnail: string | undefined) {
   const st = useEditorStore.getState();
   // Captured before the (async) save, so edits made while it runs still count
   // as unsaved afterwards.
   const ref = savedRefOf(st);
-  const result = await saveProject({
-    id: st.currentProjectId,
-    name: st.projectName.trim() || DEFAULT_PROJECT_NAME,
-    state: { canvas: st.canvas, items: st.items, spacing: st.spacing, lastLayout: st.lastLayout },
-    thumbnail,
-  });
+  savesInFlight++;
+  let result: SaveResult;
+  try {
+    result = await saveProject({
+      id: st.currentProjectId,
+      name: st.projectName.trim() || DEFAULT_PROJECT_NAME,
+      state: { canvas: st.canvas, items: st.items, spacing: st.spacing, lastLayout: st.lastLayout },
+      thumbnail,
+    });
+  } finally {
+    savesInFlight--;
+  }
   if (result.missingPhotos === 0) useEditorStore.getState().markSaved(ref);
+  rememberProject(st.currentProjectId);
   void requestPersistentStorage();
   return result;
 }
@@ -56,7 +68,6 @@ interface ToastAction {
 export default function App() {
   const canvasRef = useRef<CanvasHandle>(null);
   const stageHostRef = useRef<HTMLDivElement>(null);
-  const addImages = useEditorStore((s) => s.addImages);
   const addText = useEditorStore((s) => s.addText);
   const select = useEditorStore((s) => s.select);
   const removeSelected = useEditorStore((s) => s.removeSelected);
@@ -74,6 +85,7 @@ export default function App() {
   const zoomed = useEditorStore((s) => s.viewScale !== 1 || s.viewX !== 0 || s.viewY !== 0);
   const zoomPercent = useEditorStore((s) => Math.round(s.viewScale * 100));
   const compact = useMediaQuery(COMPACT_QUERY);
+  const busyMessage = useEditorStore((s) => s.busyMessage);
 
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; error: boolean; action?: ToastAction } | null>(null);
@@ -81,8 +93,10 @@ export default function App() {
   const showToast = useCallback((text: string, error = false, action?: ToastAction) => {
     window.clearTimeout(toastTimer.current);
     setToast({ text, error, action });
-    // Errors, and anything with a button to press, stay up long enough to act on.
-    toastTimer.current = window.setTimeout(() => setToast(null), error ? 8000 : action ? 6000 : 1800);
+    // Errors, and anything with a button to press, stay up long enough to act
+    // on; anything else long enough to read (a short "Saved" goes quickly).
+    const readTime = Math.min(6000, Math.max(1800, text.length * 55));
+    toastTimer.current = window.setTimeout(() => setToast(null), error ? 8000 : action ? 6000 : readTime);
   }, []);
   const dismissToast = useCallback(() => {
     window.clearTimeout(toastTimer.current);
@@ -116,13 +130,14 @@ export default function App() {
       ?.setAttribute('content', theme === 'dark' ? '#181b22' : '#ffffff');
   }, [theme]);
 
-  // Auto-save every 30 s when there's canvas content, and whenever the page is
+  // Auto-save every 30 s when there's unsaved work, and whenever the page is
   // hidden. Phones rarely deliver beforeunload: switching apps can be the last
   // thing the page ever sees before it's evicted, so that's when to save.
+  const autoSaveNow = useRef<() => void>(() => {});
   useEffect(() => {
     const autoSave = () => {
       const st = useEditorStore.getState();
-      if (!st.autoSaveEnabled || !hasUnsavedChanges(st)) return;
+      if (!st.autoSaveEnabled || !needsSaving(st)) return;
       const handle = canvasRef.current;
       let thumbnail: string | undefined;
       try {
@@ -147,6 +162,7 @@ export default function App() {
     const onPageHide = () => {
       if (document.visibilityState !== 'hidden') autoSave();
     };
+    autoSaveNow.current = autoSave;
     const timer = window.setInterval(autoSave, 30_000);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
@@ -157,10 +173,42 @@ export default function App() {
     };
   }, [showToast]);
 
-  // Closing the tab with unsaved work gets the browser's "Leave site?" prompt.
+  // Reopen whatever was open last time. Confirmed two frames later, once it
+  // has rendered: a project that crashes the editor must not reopen on every
+  // load (session.ts).
+  useEffect(() => {
+    void restoreLastProject().then((r) => {
+      if (r.kind === 'restored') {
+        showToast(`Reopened “${r.name}”`);
+        requestAnimationFrame(() => requestAnimationFrame(confirmRestore));
+      } else if (r.kind === 'skipped') {
+        showToast("Your last project didn't open cleanly last time, so it wasn't reopened. It's in Projects.", true);
+      }
+    });
+  }, [showToast]);
+
+  const toggleAutoSave = useCallback(() => {
+    const on = !useEditorStore.getState().autoSaveEnabled;
+    useEditorStore.getState().setAutoSaveEnabled(on);
+    if (on) {
+      showToast('Auto-save is on');
+      autoSaveNow.current(); // anything unsaved goes now, not in 30 s
+    } else {
+      showToast('Auto-save is off — use Save to keep your changes', false, {
+        label: 'Turn on',
+        run: () => {
+          useEditorStore.getState().setAutoSaveEnabled(true);
+          autoSaveNow.current();
+        },
+      });
+    }
+  }, [showToast]);
+
+  // Closing the tab with unsaved work — or mid-save, which unloading would
+  // cut short — gets the browser's "Leave site?" prompt.
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!hasUnsavedChanges(useEditorStore.getState())) return;
+      if (savesInFlight === 0 && !hasUnsavedChanges(useEditorStore.getState())) return;
       e.preventDefault();
       e.returnValue = '';
     };
@@ -201,15 +249,11 @@ export default function App() {
     }
   }, [select, showToast]);
 
-  const setImportFailures = useEditorStore((s) => s.setImportFailures);
-
   const onDrop = useCallback(
-    async (files: File[]) => {
-      const { images, failures } = await loadImageFiles(files);
-      if (images.length) addImages(images);
-      setImportFailures(failures);
+    (files: File[]) => {
+      void importPhotos(files);
     },
-    [addImages, setImportFailures],
+    [],
   );
 
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
@@ -221,19 +265,37 @@ export default function App() {
   const handleExport = useCallback(async () => {
     const handle = canvasRef.current;
     if (!handle) return;
-    // Deselect so the transformer handles aren't baked into the export.
-    select(null);
-    await new Promise((r) => requestAnimationFrame(r));
-    const st = useEditorStore.getState();
-    const name = exportFileName.trim() || fileNameForProject(st.projectName);
-    const isJpg = exportFormat === 'jpeg';
-    const mimeType = isJpg ? 'image/jpeg' : 'image/png';
-    const fileName = `${name}.${isJpg ? 'jpg' : 'png'}`;
-    // Past the browser's canvas limit the render comes back blank rather than
-    // failing, so stay under it and say so.
-    const scale = Math.min(exportScale, maxExportScale(st.canvas.width, st.canvas.height));
-    const rendered = handle.exportCanvas({ mimeType, pixelRatioMultiplier: scale });
-    const blob = rendered ? await canvasToBlob(rendered, mimeType, 0.95) : null;
+    const setBusy = useEditorStore.getState().setBusyMessage;
+    // A 3× print-size render can take seconds, with the page frozen while it
+    // draws; without this the button looked dead.
+    setBusy('Preparing image…');
+    let blob: Blob | null = null;
+    let fileName = '';
+    let scale = 1;
+    try {
+      // Deselect so the transformer handles aren't baked into the export. Two
+      // frames: one for that, one for the busy indicator to paint before the
+      // render blocks the page.
+      select(null);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const st = useEditorStore.getState();
+      const name = exportFileName.trim() || fileNameForProject(st.projectName);
+      const isJpg = exportFormat === 'jpeg';
+      const mimeType = isJpg ? 'image/jpeg' : 'image/png';
+      fileName = `${name}.${isJpg ? 'jpg' : 'png'}`;
+      // Past the browser's canvas limit the render comes back blank rather than
+      // failing, so stay under it and say so.
+      scale = Math.min(exportScale, maxExportScale(st.canvas.width, st.canvas.height));
+      const rendered = handle.exportCanvas({ mimeType, pixelRatioMultiplier: scale });
+      blob = rendered ? await canvasToBlob(rendered, mimeType, 0.95) : null;
+    } catch (err) {
+      // E.g. a canvas the browser won't read back (SecurityError), or out of
+      // memory. Uncaught, the click just did nothing.
+      showToast(`Couldn't create the image: ${err instanceof Error ? err.message : 'unknown error'}`, true);
+      return;
+    } finally {
+      setBusy(null);
+    }
     if (!blob || blob.size === 0) {
       showToast("Couldn't create the image — try a smaller size in Export settings.", true);
       return;
@@ -257,11 +319,13 @@ export default function App() {
     showToast('Canvas cleared', false, { label: 'Undo', run: undo });
   }, [clearAll, undo, showToast]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts. None while the Projects dialog is open: Delete or
+  // Ctrl+Z there acted on the canvas hidden behind it.
   useEffect(() => {
+    if (projectsOpen) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -280,18 +344,16 @@ export default function App() {
       } else if (e.key.startsWith('Arrow')) {
         const st = useEditorStore.getState();
         if (!st.selectedId || st.layoutLocked || st.croppingId || st.editingId) return;
-        const item = st.items.find((i) => i.id === st.selectedId);
-        if (!item) return;
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
         const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
         const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
-        st.updateItem(item.id, { x: item.x + dx, y: item.y + dy });
+        st.nudgeSelected(dx, dy);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, removeSelected, select, duplicateSelected]);
+  }, [projectsOpen, undo, redo, removeSelected, select, duplicateSelected]);
 
   return (
     <div className={`app ${toolsOpen ? 'sheet-open' : ''} ${toolsOpen && sheetExpanded ? 'sheet-expanded' : ''}`}>
@@ -302,6 +364,7 @@ export default function App() {
         onSave={handleSave}
         onOpenProjects={() => setProjectsOpen(true)}
         onClearCanvas={handleClearCanvas}
+        onToggleAutoSave={toggleAutoSave}
         toolsOpen={toolsOpen}
         onToggleTools={() => (toolsOpen ? closeTools() : setToolsOpen(true))}
       />
@@ -392,6 +455,13 @@ export default function App() {
         </div>
       )}
       <ImportWarningBanner />
+      {/* aria-live, not role="status": that role is the toast's. */}
+      {busyMessage && (
+        <div className="busy-indicator" aria-live="polite">
+          <span className="busy-spinner" aria-hidden />
+          {busyMessage}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useEditorStore } from '../store/useEditorStore';
 import { loadImageFile } from '../utils/loadImage';
+import { withBusy } from '../utils/importPhotos';
 
 /**
  * "Replace the selected photo": a hidden file input plus the handler that
@@ -19,7 +20,7 @@ export function useReplacePhoto() {
     e.target.value = '';
     if (!file || !selectedId) return;
     try {
-      replaceImage(selectedId, await loadImageFile(file));
+      replaceImage(selectedId, await withBusy('Adding photo…', () => loadImageFile(file)));
     } catch (err) {
       setImportFailures([
         { name: file.name, reason: err instanceof Error ? err.message : 'Could not load this image.' },

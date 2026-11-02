@@ -5,8 +5,9 @@ import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type { ImageItem } from '../../types';
 import { refitCrop } from '../../utils/cover';
-import { drawShapePath } from '../../utils/shapes';
+import { drawShapePath, traceShapePath } from '../../utils/shapes';
 import { registerImageNode } from '../../utils/imageNodeRegistry';
+import { warmthFilter } from '../../utils/warmth';
 import { UI_OVERLAY } from './overlay';
 
 interface Props {
@@ -41,18 +42,23 @@ function GlyphBorder({
 }) {
   const fs = Math.max(12, weight * 1.8);
   const step = fs * 1.1;
-  const nx = Math.max(1, Math.round(w / step));
-  const ny = Math.max(1, Math.round(h / step));
-  const sx = w / nx;
-  const sy = h / ny;
+  // Glyph centres run round a rectangle inset by half a glyph, so the border
+  // sits inside the photo like the solid ones do.
+  const inset = fs / 2;
+  const iw = Math.max(0, w - fs);
+  const ih = Math.max(0, h - fs);
+  const nx = Math.max(1, Math.round(iw / step));
+  const ny = Math.max(1, Math.round(ih / step));
+  const sx = iw / nx;
+  const sy = ih / ny;
   const pts: Array<{ key: string; x: number; y: number }> = [];
   for (let i = 0; i <= nx; i++) {
-    pts.push({ key: `t${i}`, x: i * sx, y: 0 });
-    pts.push({ key: `b${i}`, x: i * sx, y: h });
+    pts.push({ key: `t${i}`, x: inset + i * sx, y: inset });
+    pts.push({ key: `b${i}`, x: inset + i * sx, y: h - inset });
   }
   for (let j = 1; j < ny; j++) {
-    pts.push({ key: `l${j}`, x: 0, y: j * sy });
-    pts.push({ key: `r${j}`, x: w, y: j * sy });
+    pts.push({ key: `l${j}`, x: inset, y: inset + j * sy });
+    pts.push({ key: `r${j}`, x: w - inset, y: inset + j * sy });
   }
   return (
     <Group listening={false}>
@@ -93,6 +99,7 @@ export default function ImageNode({
   const [image] = useImage(item.src);
   const groupRef = useRef<Konva.Group>(null);
   const imgRef = useRef<Konva.Image>(null);
+  const borderRef = useRef<Konva.Shape>(null);
 
   const f = item.filters ?? {};
   const hasFilters = !!(
@@ -100,6 +107,7 @@ export default function ImageNode({
     f.contrast ||
     f.saturation ||
     f.hue ||
+    f.warmth ||
     f.enhance ||
     f.grayscale ||
     f.sepia ||
@@ -110,6 +118,9 @@ export default function ImageNode({
     const list: Array<typeof Konva.Filters.Brighten> = [];
     if (f.brightness) list.push(Konva.Filters.Brighten);
     if (f.contrast) list.push(Konva.Filters.Contrast);
+    // A new function per value: Konva re-runs filters when this list changes,
+    // not when a value only the function closes over does.
+    if (f.warmth) list.push(warmthFilter(f.warmth));
     if (f.hue || f.saturation) list.push(Konva.Filters.HSL);
     if (f.enhance) list.push(Konva.Filters.Enhance);
     // Grayscale and sepia are mutually exclusive full-image recolors —
@@ -118,7 +129,7 @@ export default function ImageNode({
     else if (f.sepia) list.push(Konva.Filters.Sepia);
     if (f.blur) list.push(Konva.Filters.Blur);
     return list;
-  }, [f.brightness, f.contrast, f.saturation, f.hue, f.enhance, f.grayscale, f.sepia, f.blur]);
+  }, [f.brightness, f.contrast, f.saturation, f.hue, f.warmth, f.enhance, f.grayscale, f.sepia, f.blur]);
 
   // Expose the rendered node so sidebar panels (e.g. the histogram) can read
   // its current filtered/cropped pixels, not just the original source file.
@@ -203,6 +214,24 @@ export default function ImageNode({
     onCropPanEnd();
   };
 
+  // While a handle is dragged Konva scales the whole group, so the photo used
+  // to stretch until release. Recrop it to the box it's being dragged to (a
+  // crop of that aspect, scaled, comes out undistorted), and counter-scale the
+  // border so its width stays even. handleTransformEnd bakes in the same crop.
+  const handleTransform = () => {
+    const g = groupRef.current;
+    const img = imgRef.current;
+    if (!g || !img) return;
+    const sx = g.scaleX();
+    const sy = g.scaleY();
+    if (Math.abs(sx - 1) < 1e-6 && Math.abs(sy - 1) < 1e-6) return; // rotating
+    const w = Math.max(MIN, item.width * sx);
+    const h = Math.max(MIN, item.height * sy);
+    img.crop(refitCrop(item.naturalWidth, item.naturalHeight, item.crop, item.width, item.height, w, h));
+    if (img.isCached()) img.cache(); // filters draw from the cache
+    borderRef.current?.setAttrs({ width: w, height: h, scaleX: 1 / sx, scaleY: 1 / sy });
+  };
+
   const handleTransformEnd = () => {
     const g = groupRef.current;
     if (!g) return;
@@ -210,6 +239,8 @@ export default function ImageNode({
     const sy = g.scaleY();
     g.scaleX(1);
     g.scaleY(1);
+    // Its size comes back through props on the re-render; the scale doesn't.
+    borderRef.current?.scale({ x: 1, y: 1 });
     const width = Math.max(MIN, item.width * sx);
     const height = Math.max(MIN, item.height * sy);
     const patch: Partial<ImageItem> = {
@@ -228,8 +259,10 @@ export default function ImageNode({
 
   const shape = item.clipShape ?? 'rect';
   const radius = shape === 'rect' ? item.cornerRadius ?? 0 : 0;
-  const drawPath = (ctx: Konva.Context) =>
-    drawShapePath(ctx as unknown as CanvasRenderingContext2D, item.width, item.height, shape, radius);
+  const opacity = (item.opacity ?? 100) / 100;
+  const borderWidth = item.borderWidth ?? 0;
+  const drawPath = (ctx: Konva.Context, inset = 0) =>
+    drawShapePath(ctx as unknown as CanvasRenderingContext2D, item.width, item.height, shape, radius, inset);
 
   return (
     <Group
@@ -250,29 +283,46 @@ export default function ImageNode({
         if (isCropping) return;
         onNodeDragEnd(item.id, e.target);
       }}
+      onTransform={handleTransform}
       onTransformEnd={handleTransformEnd}
     >
-      {/* Shadow caster behind the photo (per-shape shadow renders reliably). */}
+      {/* Shadow caster behind the photo (per-shape shadow renders reliably).
+          Shadow only: the caster's own fill lies under the photo, where a
+          translucent photo showed it, so the photo's shape is clipped out
+          (even-odd, inside a margin wider than any blur). The shadow fades
+          with the photo. */}
       {item.shadow && (
         <Shape
           width={item.width}
           height={item.height}
-          fill={item.borderColor ?? '#000000'}
+          fill="#000000"
           shadowColor={item.shadow.color}
           shadowBlur={item.shadow.blur}
-          shadowOpacity={item.shadow.opacity}
+          shadowOpacity={item.shadow.opacity * opacity}
           shadowOffsetX={item.shadow.offsetX}
           shadowOffsetY={item.shadow.offsetY}
           listening={false}
           sceneFunc={(ctx, node) => {
+            const sh = item.shadow!;
+            const pad = 3 * sh.blur + Math.abs(sh.offsetX) + Math.abs(sh.offsetY) + 10;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-pad, -pad, item.width + 2 * pad, item.height + 2 * pad);
+            traceShapePath(ctx as unknown as CanvasRenderingContext2D, item.width, item.height, shape, radius);
+            ctx.clip('evenodd');
             drawPath(ctx);
             ctx.fillStrokeShape(node);
+            ctx.restore();
           }}
         />
       )}
 
-      {/* Clipped photo. */}
-      <Group clipFunc={drawPath}>
+      {/* Clipped photo, and its border: inset by half its width so the whole
+          stroke sits inside the photo (centred on the edge, half of it
+          spilled into the gaps between photos and was cut off at the canvas
+          edge), and clipped with it, so a corner radius smaller than the
+          border still leaves a rounded corner. */}
+      <Group clipFunc={(ctx) => drawPath(ctx)}>
         <KonvaImage
           ref={imgRef}
           image={image}
@@ -283,7 +333,7 @@ export default function ImageNode({
           scaleX={item.flipX ? -1 : 1}
           scaleY={item.flipY ? -1 : 1}
           crop={item.crop}
-          opacity={(item.opacity ?? 100) / 100}
+          opacity={opacity}
           filters={filters}
           brightness={(f.brightness ?? 0) / 100}
           contrast={f.contrast ?? 0}
@@ -304,31 +354,38 @@ export default function ImageNode({
           onDragMove={handlePanMove}
           onDragEnd={handlePanEnd}
         />
+        {borderWidth > 0 && (item.borderStyle ?? 'solid') !== 'glyph' && (
+          <Shape
+            ref={borderRef}
+            width={item.width}
+            height={item.height}
+            stroke={item.borderColor ?? '#ffffff'}
+            strokeWidth={borderWidth}
+            dash={
+              item.borderStyle === 'dashed'
+                ? [borderWidth * 2.4, borderWidth * 1.6]
+                : item.borderStyle === 'dotted'
+                  ? [0.01, borderWidth * 1.9]
+                  : undefined
+            }
+            lineCap={item.borderStyle === 'dotted' ? 'round' : 'butt'}
+            listening={false}
+            // The node's own size, not item's: mid-resize it's the live box.
+            sceneFunc={(ctx, node) => {
+              drawShapePath(
+                ctx as unknown as CanvasRenderingContext2D,
+                node.width(),
+                node.height(),
+                shape,
+                radius,
+                borderWidth / 2,
+              );
+              ctx.fillStrokeShape(node);
+            }}
+          />
+        )}
       </Group>
-
-      {/* Border, drawn on top so it isn't clipped away. */}
-      {(item.borderWidth ?? 0) > 0 && (item.borderStyle ?? 'solid') !== 'glyph' && (
-        <Shape
-          width={item.width}
-          height={item.height}
-          stroke={item.borderColor ?? '#ffffff'}
-          strokeWidth={item.borderWidth}
-          dash={
-            item.borderStyle === 'dashed'
-              ? [(item.borderWidth ?? 1) * 2.4, (item.borderWidth ?? 1) * 1.6]
-              : item.borderStyle === 'dotted'
-                ? [0.01, (item.borderWidth ?? 1) * 1.9]
-                : undefined
-          }
-          lineCap={item.borderStyle === 'dotted' ? 'round' : 'butt'}
-          listening={false}
-          sceneFunc={(ctx, node) => {
-            drawPath(ctx);
-            ctx.fillStrokeShape(node);
-          }}
-        />
-      )}
-      {(item.borderWidth ?? 0) > 0 && item.borderStyle === 'glyph' && (
+      {borderWidth > 0 && item.borderStyle === 'glyph' && (
         <GlyphBorder
           w={item.width}
           h={item.height}

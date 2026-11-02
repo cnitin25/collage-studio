@@ -11,11 +11,12 @@ const STICKERS = [
   '📌', '✅', '➡️', '💬', '🦄', '🐱', '🌿', '🎂',
 ];
 
-const FONTS = [
+// `aliases`: the value a font had before, which saved projects still carry.
+const FONTS: { label: string; value: string; aliases?: string[] }[] = [
   { label: 'Sans', value: 'Inter, system-ui, sans-serif' },
   { label: 'Serif', value: 'Georgia, "Times New Roman", serif' },
   { label: 'Mono', value: 'ui-monospace, "Courier New", monospace' },
-  { label: 'Display', value: 'Impact, "Arial Black", sans-serif' },
+  { label: 'Display', value: 'Anton, Impact, "Arial Black", sans-serif', aliases: ['Impact, "Arial Black", sans-serif'] },
   { label: 'Script', value: '"Dancing Script", cursive' },
   { label: 'Brush', value: 'Pacifico, cursive' },
   { label: 'Hand', value: 'Caveat, cursive' },
@@ -117,7 +118,7 @@ export default function InsertPanel() {
             {FONTS.map((fnt) => (
               <button
                 key={fnt.value}
-                className={`chip ${selText.fontFamily === fnt.value ? 'is-active' : ''}`}
+                className={`chip ${selText.fontFamily === fnt.value || fnt.aliases?.includes(selText.fontFamily) ? 'is-active' : ''}`}
                 onClick={() => updateItem(selText.id, { fontFamily: fnt.value })}
               >
                 {fnt.label}

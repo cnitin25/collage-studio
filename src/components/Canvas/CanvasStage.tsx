@@ -55,6 +55,9 @@ const ALL_ANCHORS = [
 // derived height and produced runaway/zero-height boxes.
 const TEXT_ANCHORS = ['middle-left', 'middle-right'];
 
+/** Free rotation, but it settles on the eighth turns within a few degrees. */
+const ROTATION_SNAPS = [0, 45, 90, 135, 180, 225, 270, 315];
+
 const TOUCH_ANCHOR_SIZE = 12;
 /** ~40 px touch target around a 12 px dot (hit stroke is centred on the edge). */
 const touchAnchorStyle = (anchor: Konva.Rect) => anchor.hitStrokeWidth(28);
@@ -192,58 +195,54 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     exportDataURL: ({ quality, ...opts }) => renderExport(opts)?.toDataURL(opts.mimeType, quality) ?? null,
   }));
 
-  // Keyboard: track Space for pan mode
+  // Keyboard: track Space for pan mode. Space belongs to the focused control
+  // only when it means something there: typing in a field, or pressing a
+  // control the keyboard moved to. A button focused by a mouse click keeps
+  // that focus, and Space used to click it again — a second Duplicate when
+  // the user meant to pan. (:focus-visible can't tell these apart: Chrome
+  // turns it on for the focused element at the keypress itself.)
   useEffect(() => {
-    const onDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && e.target === document.body) {
-        e.preventDefault();
-        spaceDown.current = true;
-        if (wrapRef.current) wrapRef.current.style.cursor = 'grab';
+    let focusFromPointer = false;
+    const onPointerDown = () => {
+      focusFromPointer = true;
+    };
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') focusFromPointer = false;
+    };
+    const ownsSpace = (t: EventTarget | null) => {
+      if (!(t instanceof HTMLElement) || t === document.body) return false;
+      if (t.isContentEditable || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return true;
+      if (t instanceof HTMLInputElement && !/^(checkbox|radio|range|button|submit|reset|color|file)$/.test(t.type)) {
+        return true;
       }
+      return !focusFromPointer;
+    };
+    const onDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || ownsSpace(e.target)) return;
+      e.preventDefault();
+      spaceDown.current = true;
+      if (wrapRef.current) wrapRef.current.style.cursor = 'grab';
     };
     const onUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
+        // A button clicks on Space's keyup; ours was a pan.
+        if (spaceDown.current) e.preventDefault();
         spaceDown.current = false;
         isPanning.current = false;
         if (wrapRef.current) wrapRef.current.style.cursor = '';
       }
     };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onTab, true);
     window.addEventListener('keydown', onDown);
     window.addEventListener('keyup', onUp);
     return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onTab, true);
       window.removeEventListener('keydown', onDown);
       window.removeEventListener('keyup', onUp);
     };
   }, []);
-
-  // Ctrl+scroll to zoom, Space+drag to pan
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-      const stage = stageRef.current;
-      if (!stage) return;
-      const pointer = stage.getPointerPosition();
-      if (!pointer) return;
-      const factor = e.deltaY < 0 ? 1.1 : 0.9;
-      const newScale = Math.max(0.1, Math.min(8, viewScale * factor));
-      // Canvas point under the cursor, then the view offset that puts that
-      // same point back under the cursor at the new scale. (Solving for
-      // `mouseX - mouseX * newScale` instead only held from the neutral view —
-      // once zoomed, zooming again anywhere else made the content jump.)
-      const mouseX = (pointer.x / display.scale - viewX) / viewScale;
-      const mouseY = (pointer.y / display.scale - viewY) / viewScale;
-      setView(
-        newScale,
-        pointer.x / display.scale - mouseX * newScale,
-        pointer.y / display.scale - mouseY * newScale,
-      );
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [display.scale, viewScale, viewX, viewY, setView]);
 
   // Space+drag pan handling on the Stage
   const panStart = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null);
@@ -283,6 +282,48 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
   // zooms. They're registered once and read the latest view through a ref.
   const latestView = useRef({ viewScale, viewX, viewY, displayScale: display.scale });
   latestView.current = { viewScale, viewX, viewY, displayScale: display.scale };
+
+  // Ctrl/⌘+wheel (and a trackpad pinch, which arrives as one) zooms; a plain
+  // wheel or two-finger scroll pans. Registered once; reads the view from the
+  // store, which is current even between renders of a fast event stream.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      const { viewScale: vs, viewX: vx, viewY: vy } = useEditorStore.getState();
+      const ds = latestView.current.displayScale;
+      const px = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1; // lines / pages → px
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const pointer = stage.getPointerPosition();
+        if (!pointer) return;
+        // In proportion to how far the wheel or fingers moved. A fixed 10% per
+        // event turned one gentle pinch (dozens of tiny events) into ~7x; the
+        // cap keeps one mouse-wheel notch a modest step.
+        const factor = Math.min(1.2, Math.max(1 / 1.2, Math.exp(-e.deltaY * px * 0.01)));
+        const newScale = Math.max(0.1, Math.min(8, vs * factor));
+        // Canvas point under the cursor, then the view offset that puts that
+        // same point back under the cursor at the new scale. (Solving for
+        // `mouseX - mouseX * newScale` instead only held from the neutral view —
+        // once zoomed, zooming again anywhere else made the content jump.)
+        const mouseX = (pointer.x / ds - vx) / vs;
+        const mouseY = (pointer.y / ds - vy) / vs;
+        setView(newScale, pointer.x / ds - mouseX * newScale, pointer.y / ds - mouseY * newScale);
+      } else if (vs !== 1 || vx !== 0 || vy !== 0) {
+        // Only once zoomed or moved: at the fitted view, a scroll that passes
+        // over the canvas must not push it out of place.
+        e.preventDefault();
+        let dx = e.deltaX * px;
+        let dy = e.deltaY * px;
+        if (e.shiftKey && dx === 0) [dx, dy] = [dy, 0]; // Shift+wheel scrolls sideways
+        setView(vs, vx - dx / ds, vy - dy / ds);
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [setView]);
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -412,7 +453,9 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
 
     if (snapEnabled) {
       const others = items.filter((i) => i.id !== id).map(itemBox);
-      const threshold = 6 / display.scale;
+      // 6 screen px at the current zoom, as resize snapping already is: in
+      // canvas px alone, zoomed in it pulled from far away, zoomed out barely.
+      const threshold = 6 / (display.scale * viewScale);
       const snapped = computeSnap(box, others, canvas.width, canvas.height, threshold);
       node.position({ x: snapped.x, y: snapped.y });
       box.x = snapped.x;
@@ -544,25 +587,44 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
             })}
           </Group>
 
-          {/* Collage-wide border, drawn on top so it isn't clipped by the group above. */}
+          {/* Collage-wide border, drawn over the photos. Its path is inset by
+              half the width so the whole stroke is inside the canvas (centred
+              on the edge, half of it was cut off — and none at a rounded
+              corner, so corners came out twice as thick as the sides), and
+              it's clipped to the frame so a radius smaller than the border
+              still gives a clean rounded corner. */}
           {(canvas.frameBorderWidth ?? 0) > 0 && (
-            <Shape
-              width={canvas.width}
-              height={canvas.height}
-              stroke={canvas.frameBorderColor ?? '#ffffff'}
-              strokeWidth={canvas.frameBorderWidth}
+            <Group
               listening={false}
-              sceneFunc={(ctx, node) => {
+              clipFunc={(ctx) =>
                 drawShapePath(
                   ctx as unknown as CanvasRenderingContext2D,
                   canvas.width,
                   canvas.height,
                   'rect',
                   canvas.frameCornerRadius ?? 0,
-                );
-                ctx.fillStrokeShape(node);
-              }}
-            />
+                )
+              }
+            >
+              <Shape
+                width={canvas.width}
+                height={canvas.height}
+                stroke={canvas.frameBorderColor ?? '#ffffff'}
+                strokeWidth={canvas.frameBorderWidth}
+                listening={false}
+                sceneFunc={(ctx, node) => {
+                  drawShapePath(
+                    ctx as unknown as CanvasRenderingContext2D,
+                    canvas.width,
+                    canvas.height,
+                    'rect',
+                    canvas.frameCornerRadius ?? 0,
+                    (canvas.frameBorderWidth ?? 0) / 2,
+                  );
+                  ctx.fillStrokeShape(node);
+                }}
+              />
+            </Group>
           )}
 
           {guides.map((g, i) =>
@@ -571,7 +633,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                 key={`gx${i}`}
                 points={[g.pos, 0, g.pos, canvas.height]}
                 stroke="#ff7a59"
-                strokeWidth={1 / scale}
+                strokeWidth={1 / (scale * viewScale)}
                 listening={false}
                 name={UI_OVERLAY}
               />
@@ -580,7 +642,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                 key={`gy${i}`}
                 points={[0, g.pos, canvas.width, g.pos]}
                 stroke="#ff7a59"
-                strokeWidth={1 / scale}
+                strokeWidth={1 / (scale * viewScale)}
                 listening={false}
                 name={UI_OVERLAY}
               />
@@ -590,6 +652,8 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
           <Transformer
             ref={trRef}
             rotateEnabled={!isCroppingSelected}
+            rotationSnaps={ROTATION_SNAPS}
+            rotationSnapTolerance={4}
             keepRatio={lockRatio}
             enabledAnchors={
               isCroppingSelected ? [] : isTextSelected ? TEXT_ANCHORS : lockRatio ? CORNER_ANCHORS : ALL_ANCHORS

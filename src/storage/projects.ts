@@ -39,8 +39,13 @@ export interface SaveResult extends ProjectMeta {
 // Saves and garbage collection run one at a time. Otherwise a collection pass
 // could run after a save has written its photo blobs but before it has written
 // the project record that references them — and delete those blobs as orphans.
+// Every tab of the site shares one database, so the lock must span tabs too:
+// a Web Lock does. The in-page queue is only the fallback where Web Locks are
+// missing (an insecure context, such as `npm run dev:lan` opened on a phone).
+const STORAGE_LOCK = 'collage-studio-storage';
 let storageQueue: Promise<unknown> = Promise.resolve();
-function withStorageLock<T>(fn: () => Promise<T>): Promise<T> {
+async function withStorageLock<T>(fn: () => Promise<T>): Promise<T> {
+  if (navigator.locks) return navigator.locks.request(STORAGE_LOCK, fn);
   const run = storageQueue.then(fn, fn);
   storageQueue = run.catch(() => {});
   return run;
@@ -120,21 +125,37 @@ async function saveProjectUnlocked(args: {
   const { id, name, state, thumbnail } = args;
 
   let missingPhotos = 0;
-  const seen = new Set<string>();
+  const stored = new Map<string, boolean>(); // assetId -> persisted
   for (const it of state.items) {
-    if (it.type === 'image' && it.assetId && !seen.has(it.assetId)) {
-      seen.add(it.assetId);
-      if (!(await persistAsset(it.assetId, it.src))) missingPhotos++;
+    if (it.type === 'image' && it.assetId && !stored.has(it.assetId)) {
+      const ok = await persistAsset(it.assetId, it.src);
+      stored.set(it.assetId, ok);
+      if (!ok) missingPhotos++;
     }
   }
 
   // The background image lives on `canvas`, not in `items` — it needs the
   // same blob-persistence treatment or it silently vanishes on reopen (the
-  // src is a blob: URL that dies with the page).
-  const { backgroundType, backgroundImageSrc, backgroundAssetId } = state.canvas;
-  if (backgroundType === 'image' && backgroundAssetId && !seen.has(backgroundAssetId)) {
-    seen.add(backgroundAssetId);
-    if (!(await persistAsset(backgroundAssetId, backgroundImageSrc))) missingPhotos++;
+  // src is a blob: URL that dies with the page). It's kept while another
+  // background type is showing, too: switching back after a reload must still
+  // find it, as it does within a session.
+  let canvas = state.canvas;
+  const { backgroundType, backgroundImageSrc, backgroundAssetId } = canvas;
+  if (backgroundAssetId) {
+    let ok = stored.get(backgroundAssetId);
+    if (ok === undefined) {
+      ok = await persistAsset(backgroundAssetId, backgroundImageSrc);
+      stored.set(backgroundAssetId, ok);
+      if (!ok && backgroundType === 'image') missingPhotos++;
+    }
+    // An unused background that can't be read any more isn't worth a
+    // warning: drop the reference instead of storing a dead one.
+    canvas =
+      ok || backgroundType === 'image'
+        ? { ...canvas, backgroundImageSrc: '' }
+        : { ...canvas, backgroundImageSrc: undefined, backgroundAssetId: undefined };
+  } else if (backgroundImageSrc?.startsWith('blob:')) {
+    canvas = { ...canvas, backgroundImageSrc: undefined };
   }
 
   // `thumbnail` is optional per call (e.g. auto-save doesn't render one). Since
@@ -150,10 +171,6 @@ async function saveProjectUnlocked(args: {
 
   // Strip volatile object URLs; the blobs live in the assets store now.
   const items = state.items.map((it) => (it.type === 'image' ? { ...it, src: '' } : { ...it }));
-  const canvas =
-    backgroundType === 'image' && backgroundAssetId
-      ? { ...state.canvas, backgroundImageSrc: '' }
-      : state.canvas;
   const updatedAt = Date.now();
   await putProjectRec({ id, name, updatedAt, thumbnail: finalThumbnail, state: { ...state, items, canvas } });
   // A replaced or deleted photo leaves its old blob behind; drop it now.
@@ -177,10 +194,14 @@ export async function openProject(
     }
   }
 
+  // Any stored background, not only the one showing (see saveProjectUnlocked).
   let canvas = rec.state.canvas;
-  if (canvas.backgroundType === 'image' && canvas.backgroundAssetId) {
+  if (canvas.backgroundAssetId) {
     const blob = await getAssetBlob(canvas.backgroundAssetId);
     canvas = { ...canvas, backgroundImageSrc: blob ? URL.createObjectURL(blob) : '' };
+  } else if (canvas.backgroundImageSrc?.startsWith('blob:')) {
+    // A dead URL from a save made before backgrounds were always stored.
+    canvas = { ...canvas, backgroundImageSrc: undefined };
   }
 
   return {
