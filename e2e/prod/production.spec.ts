@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -8,6 +8,26 @@ import { fileURLToPath } from 'node:url';
 // file — through the UI alone: the dev-only store hook isn't in this build.
 
 const fixture = (name: string) => fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url));
+
+/** Photos in the stored record of the project the next load reopens. */
+const storedPhotoCount = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const id = localStorage.getItem('collage-studio-last-project') ?? '';
+        const req = indexedDB.open('collage-studio');
+        req.onerror = () => resolve(-1);
+        req.onsuccess = () => {
+          const get = req.result.transaction('projects').objectStore('projects').get(id);
+          get.onerror = () => resolve(-1);
+          get.onsuccess = () => {
+            req.result.close();
+            const rec = get.result as { state: { items: { type: string }[] } } | undefined;
+            resolve(rec ? rec.state.items.filter((i) => i.type === 'image').length : 0);
+          };
+        };
+      }),
+  );
 
 test('the production build works under its security policy', async ({ page }) => {
   const violations: string[] = [];
@@ -67,7 +87,9 @@ test('the production build works under its security policy', async ({ page }) =>
 
   await test.step('reload reopens the last saved project', async () => {
     await toolbar('Save').click();
-    await expect(page.getByRole('status')).toHaveText('Saved');
+    // Wait for the record itself: the previous step's "Saved" toast can still
+    // be showing, and reloading mid-save would lose the project.
+    await expect.poll(() => storedPhotoCount(page)).toBe(2);
     await page.reload();
     await expect(photos).toHaveCount(2);
   });
