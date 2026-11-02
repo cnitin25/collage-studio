@@ -62,6 +62,39 @@ const TOUCH_ANCHOR_SIZE = 12;
 /** ~40 px touch target around a 12 px dot (hit stroke is centred on the edge). */
 const touchAnchorStyle = (anchor: Konva.Rect) => anchor.hitStrokeWidth(28);
 
+/** How far above its box the rotate handle sits: Konva's default. */
+const ROTATE_HANDLE_OFFSET = 50;
+
+/**
+ * The stage is exactly the canvas's size, so for a photo at the top of the
+ * canvas (or zoomed and panned past the stage's edge) the rotate handle's
+ * usual spot above it is off the stage, where nothing can grab it. Then the
+ * handle moves inside the box, `inside` screen px below its top edge (clear
+ * of the top resize handle's grab area), or further down if that is off the
+ * stage too — but never as far as the centre: from there Konva would turn the
+ * photo half a turn the moment a drag began.
+ */
+function placeRotateHandle(tr: Konva.Transformer, stage: Konva.Stage, inside: number) {
+  const onStage = () => {
+    tr.forceUpdate();
+    const handle = tr.findOne('.rotater');
+    if (!handle) return true;
+    const { x, y } = handle.getAbsolutePosition();
+    const r = tr.anchorSize() / 2;
+    return x >= r && y >= r && x <= stage.width() - r && y <= stage.height() - r;
+  };
+  tr.rotateAnchorOffset(ROTATE_HANDLE_OFFSET);
+  if (tr.nodes().length === 0 || onStage()) return;
+  const h = Math.abs(tr.findOne('.back')?.height() ?? 0);
+  for (const depth of [Math.min(inside, h / 3), h / 3, h * 0.45]) {
+    tr.rotateAnchorOffset(-depth);
+    if (onStage()) return;
+  }
+  // Off the side of the stage, where no depth helps: back to the usual spot.
+  tr.rotateAnchorOffset(ROTATE_HANDLE_OFFSET);
+  tr.forceUpdate();
+}
+
 function itemBox(it: CollageItem): Box {
   return { x: it.x, y: it.y, ...itemSize(it) };
 }
@@ -439,8 +472,10 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     }
     const node = stage.findOne<Konva.Node>(`#${selectedId}`);
     tr.nodes(node ? [node] : []);
+    placeRotateHandle(tr, stage, coarsePointer ? 44 : 28);
     tr.getLayer()?.batchDraw();
-  }, [selectedId, editingId, layoutLocked, items]);
+    // The view and the stage's size move the handle on screen too.
+  }, [selectedId, editingId, layoutLocked, items, viewScale, viewX, viewY, display.scale, coarsePointer]);
 
   const isCroppingSelected = !!croppingId && croppingId === selectedId;
 

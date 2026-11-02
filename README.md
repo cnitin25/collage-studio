@@ -41,6 +41,9 @@ never leave your device.
   - Dragging a crop follows the pointer on flipped and rotated photos too,
     the 90° rotate buttons turn an item about its centre, and rotating with
     the handle settles on 45° steps.
+  - The rotate handle stays where it can be grabbed: for a photo at the top
+    of the canvas, or zoomed in past one, it moves inside the photo instead
+    of sitting off the edge of the stage.
 - **Text & stickers** — editable text boxes with font/size/weight/color
   controls, and an emoji sticker palette. Every text font ships with the app
   (Inter, Anton for Display, and four calligraphy fonts), so a collage's text
@@ -324,8 +327,9 @@ e2e/                        standalone Playwright project (its own
                              presets vs hand-set sliders
     project-files.spec.ts    import never fetches, newer/damaged files, export
                              failure message, full round trip
-    polish.spec.ts           live resize crop/rewrap, rotation snaps, snap at
-                             any zoom, progress, warmth, fonts, crash recovery
+    polish.spec.ts           live resize crop/rewrap, rotation snaps, a rotate
+                             handle that stays on the stage, snap at any zoom,
+                             progress, warmth, fonts, crash recovery
     helpers.ts               store access, generated test images, image metrics,
                              export pixel analysis
 .github/workflows/ci.yml     lint, type-check, e2e (Chromium, WebKit) and the
@@ -362,8 +366,11 @@ e2e/                        standalone Playwright project (its own
   system fonts too (Georgia / Courier New, with fallbacks); every other text
   font is bundled.
 - The stage is exactly the canvas's size, so a handle that falls outside it
-  can't be reached — notably the rotate handle of a photo that touches the
-  top of the canvas. Use the 90° rotate buttons for those.
+  can't be reached. The rotate handle moves inside the photo when it would
+  (see above), but a resize handle on the canvas edge is still partly cut
+  off, and a photo zoomed so far that its centre is off the side of the
+  stage keeps its rotate handle off it too: zoom out, or use the 90° rotate
+  buttons.
 - One item is selected at a time: no multi-select, grouping, or aligning
   items to each other.
 

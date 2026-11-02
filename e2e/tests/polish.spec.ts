@@ -73,7 +73,8 @@ test('a text box rewraps while its handle is dragged, instead of stretching', as
 });
 
 test('rotating with the handle snaps to the nearest 45°', async ({ page }) => {
-  // Not laid out: a full-height photo's rotate handle sits above the stage.
+  // Not laid out, so the handle is in its usual spot above the photo (the
+  // tests below cover a photo at the top of the canvas).
   const id = await addImage(page);
   await act(page, `s.select('${id}')`);
   const { anchor, centre } = await anchorGeometry(page, id, 'rotater');
@@ -88,6 +89,60 @@ test('rotating with the handle snaps to the nearest 45°', async ({ page }) => {
   for (const deg of [20, 45, 70, 87]) await page.mouse.move(to(deg).x, to(deg).y, { steps: 3 });
   await page.mouse.up();
   expect(await state<number>(page, 's.items[0].rotation')).toBeCloseTo(90, 5);
+});
+
+/** Drag a rotate handle round its item's centre by `degrees`, clockwise. */
+async function rotateBy(page: Page, anchor: { x: number; y: number }, centre: { x: number; y: number }, degrees: number) {
+  const radius = Math.hypot(anchor.x - centre.x, anchor.y - centre.y);
+  const start = Math.atan2(anchor.y - centre.y, anchor.x - centre.x);
+  await page.mouse.move(anchor.x, anchor.y);
+  await page.mouse.down();
+  for (let d = 15; d <= degrees; d += 15) {
+    const a = start + (d * Math.PI) / 180;
+    await page.mouse.move(centre.x + radius * Math.cos(a), centre.y + radius * Math.sin(a), { steps: 2 });
+  }
+  await page.mouse.up();
+}
+
+test('a photo at the top of the canvas keeps its rotate handle where it can be grabbed', async ({ page }) => {
+  // Laid out, the photo touches the canvas top: the handle's usual spot,
+  // 50 px above it, is off the stage.
+  const id = await addImage(page);
+  await act(page, `s.applyLayout({ type: 'grid' }); s.select('${id}')`);
+  const { box } = await stageGeometry(page);
+  const { anchor, centre } = await anchorGeometry(page, id, 'rotater');
+  expect(anchor.y, 'the handle is on the stage').toBeGreaterThan(box.y);
+  expect(anchor.y, 'and above the photo’s centre, so it still turns it').toBeLessThan(centre.y);
+  await rotateBy(page, anchor, centre, 90);
+  expect(await state<number>(page, 's.items[0].rotation')).toBeCloseTo(90, 5);
+});
+
+test('zoomed in past the top of a photo, its rotate handle is still on the stage', async ({ page }) => {
+  const id = await addImage(page);
+  await act(page, `s.applyLayout({ type: 'grid' }); s.select('${id}')`);
+  const { box, scale: ds } = await stageGeometry(page);
+  // 2x, centred across, and panned so the photo's top edge (canvas y 24) is
+  // 150 px above the stage.
+  await act(page, `s.setView(2, -540, ${-150 / ds - 48})`);
+  const { anchor, centre } = await anchorGeometry(page, id, 'rotater');
+  expect(anchor.y, 'on the stage').toBeGreaterThan(box.y);
+  expect(anchor.y, 'above the centre').toBeLessThan(centre.y);
+  await rotateBy(page, anchor, centre, 45);
+  expect(await state<number>(page, 's.items[0].rotation')).toBeCloseTo(45, 5);
+});
+
+test('the rotate handle goes back above a photo once there is room', async ({ page }) => {
+  const id = await addImage(page);
+  await act(page, `s.applyLayout({ type: 'grid' }); s.select('${id}')`);
+  await act(page, `s.updateItem('${id}', { y: 400, height: 300 })`);
+  const { anchor, centre } = await anchorGeometry(page, id, 'rotater');
+  const { box } = await stageGeometry(page);
+  const top = await page.evaluate((id) => {
+    const K = window.Konva;
+    return K.stages[K.stages.length - 1].findOne('#' + id)!.getClientRect().y;
+  }, id);
+  expect(anchor.y, 'above the photo again').toBeLessThan(box.y + top);
+  expect(anchor.y).toBeLessThan(centre.y);
 });
 
 test('snapping reaches the same distance on screen at any zoom', async ({ page }) => {

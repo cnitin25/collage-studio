@@ -66,10 +66,10 @@ specific to working here with Claude Code, or worth calling out twice.
 - Don't edit `src/` while the e2e suite is running against the dev server:
   Vite reloads the pages under test, and the run fails with "Execution
   context was destroyed" or a store that has suddenly emptied.
-- Playwright's WebKit build on Windows can crash under a full parallel run
-  of both engines (worker exit code 3221226505). Rerun the failing specs
-  alone (`--project=webkit`) before treating that as a bug; CI runs each
-  engine as its own job.
+- Playwright's WebKit build on Windows crashes under load (worker exit code
+  3221226505, "Target page … has been closed", "Out of memory" in the big
+  import/export specs). Run it locally with `--project=webkit --workers=2`
+  before treating a failure as a bug; CI runs each engine as its own job.
 - Photos are stored in IndexedDB as bytes plus MIME type, never as Blobs —
   Safari's private windows (and Playwright's WebKit) refuse Blobs there.
   See AGENTS.md's Storage section.
