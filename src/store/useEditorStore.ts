@@ -201,9 +201,11 @@ export function savedRefOf(s: SavedRef): SavedRef {
 /**
  * True when the editor holds work that isn't in the last save/load. Compares
  * by reference: immer hands back a new object for anything that changed and
- * the same object for anything that didn't, so this needs no deep compare —
- * at the cost of reading "changed then changed back" as unsaved, which errs
- * on the side of asking. An empty canvas is never worth a prompt.
+ * the same object for anything that didn't, so this needs no deep compare.
+ * Undo and redo restore the very objects a step held, so undoing back to the
+ * saved state reads as saved; changing a value back by hand still reads as
+ * unsaved, which errs on the side of asking. An empty canvas is never worth a
+ * prompt.
  */
 export function hasUnsavedChanges(s: SavedRef & { savedRef: SavedRef }): boolean {
   if (s.items.length === 0) return false;
@@ -259,15 +261,28 @@ let lastNudge: { id: string; at: number; snap: Snapshot } | null = null;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-function snapshot(
-  state: Pick<EditorState, 'items' | 'canvas' | 'spacing' | 'lastLayout'>,
-): Snapshot {
-  return {
-    items: structuredClone(state.items),
-    canvas: { ...state.canvas },
-    spacing: { ...state.spacing },
-    lastLayout: state.lastLayout ? { ...state.lastLayout } : null,
-  };
+/**
+ * A history step: the state's own objects, not copies. immer never changes a
+ * committed object — every edit produces new ones and leaves the old intact —
+ * so keeping a reference is as safe as a copy and costs nothing: editing one
+ * photo no longer copies every photo into history. It also means undoing to
+ * the saved state restores the very objects that were saved, which is what
+ * hasUnsavedChanges compares. Take it from get(), never from a draft.
+ */
+function snapshot(state: Pick<EditorState, 'items' | 'canvas' | 'spacing' | 'lastLayout'>): Snapshot {
+  return { items: state.items, canvas: state.canvas, spacing: state.spacing, lastLayout: state.lastLayout };
+}
+
+/** Record `prev` as an undo step: oldest step out past the limit, redo branch gone. */
+function pushStep(s: Draft<EditorState>, prev: Snapshot, label: string): void {
+  if (s.past.length >= HISTORY_LIMIT) {
+    s.past.shift();
+    s.historyLabels.shift();
+  }
+  s.past.push(prev);
+  s.historyLabels.push(label);
+  s.future = [];
+  s.futureLabels = [];
 }
 
 function placeImage(img: LoadedImage, canvas: CanvasConfig, index: number): ImageItem {
@@ -378,11 +393,7 @@ export const useEditorStore = create<EditorState>()(
       if (images.length === 0) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const base = s.items.length;
         images.forEach((img, i) => s.items.push(placeImage(img, s.canvas, base + i)));
         s.selectedId = s.items[s.items.length - 1]?.id ?? null;
@@ -394,11 +405,7 @@ export const useEditorStore = create<EditorState>()(
       const prev = snapshot(get());
       const id = uid('txt');
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const w = Math.min(680, s.canvas.width * 0.6);
         const item: TextItem = {
           id,
@@ -427,11 +434,7 @@ export const useEditorStore = create<EditorState>()(
       const prev = snapshot(get());
       const id = uid('stk');
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const size = Math.round(Math.min(s.canvas.width, s.canvas.height) * 0.18);
         const item: StickerItem = {
           id,
@@ -455,11 +458,7 @@ export const useEditorStore = create<EditorState>()(
       if (!current) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const item = s.items.find((it) => it.id === id);
         if (!item) return;
         const p = patch as Record<string, unknown>;
@@ -485,11 +484,7 @@ export const useEditorStore = create<EditorState>()(
       if (!selectedId) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         s.items = s.items.filter((it) => it.id !== selectedId);
         s.selectedId = null;
         s.croppingId = null;
@@ -507,11 +502,7 @@ export const useEditorStore = create<EditorState>()(
       copy.x += 28;
       copy.y += 28;
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         s.items.push(copy);
         s.selectedId = copy.id;
         s.croppingId = null;
@@ -527,11 +518,7 @@ export const useEditorStore = create<EditorState>()(
       if (idxA === -1 || idxB === -1) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const a = s.items[idxA];
         const b = s.items[idxB];
         const ga = { x: a.x, y: a.y, width: a.width, height: a.height, rotation: a.rotation };
@@ -556,11 +543,7 @@ export const useEditorStore = create<EditorState>()(
       if (!current || current.type !== 'image') return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const it = s.items.find((i) => i.id === id);
         if (!it || it.type !== 'image') return;
         it.src = image.src;
@@ -575,11 +558,7 @@ export const useEditorStore = create<EditorState>()(
       const label = "Background";
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         Object.assign(s.canvas, patch);
       });
     },
@@ -614,11 +593,7 @@ export const useEditorStore = create<EditorState>()(
       if (!sel || sel.type !== 'image') return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const it = s.items.find((i) => i.id === selectedId);
         if (it && it.type === 'image') Object.assign(it, structuredClone(styleClipboard));
       });
@@ -641,11 +616,7 @@ export const useEditorStore = create<EditorState>()(
       };
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         s.items.forEach((it) => {
           if (it.type === 'image' && it.id !== selId) Object.assign(it, structuredClone(style));
         });
@@ -658,11 +629,7 @@ export const useEditorStore = create<EditorState>()(
       if (w === width && h === height) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         s.canvas.width = width;
         s.canvas.height = height;
         if (s.lastLayout) layoutToDraft(s, s.lastLayout);
@@ -674,11 +641,7 @@ export const useEditorStore = create<EditorState>()(
       if (get().items.length === 0) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         s.items = [];
         s.selectedId = null;
         s.croppingId = null;
@@ -692,11 +655,7 @@ export const useEditorStore = create<EditorState>()(
       if (get().items.some((i) => i.type === 'image') === false) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         layoutToDraft(s, spec);
       });
     },
@@ -710,11 +669,7 @@ export const useEditorStore = create<EditorState>()(
 
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push('Shuffle photos');
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, 'Shuffle photos');
 
         // Permute only the image items' array positions; text/sticker items
         // keep their slot.
@@ -737,11 +692,7 @@ export const useEditorStore = create<EditorState>()(
       if (!preset) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const it = s.items.find((i) => i.id === selId);
         if (!it || it.type !== 'image') return;
         // A frame is a solid border: left on 'glyph', Matte drew a ring of ✕s.
@@ -765,11 +716,7 @@ export const useEditorStore = create<EditorState>()(
       const label = alreadyActive ? 'Remove enhance' : 'Enhance';
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const it = s.items.find((i) => i.id === selId);
         if (!it || it.type !== 'image') return;
         it.filters = alreadyActive
@@ -801,11 +748,7 @@ export const useEditorStore = create<EditorState>()(
       if (!item || item.type !== 'image') return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const it = s.items.find((i) => i.id === id);
         if (it && it.type === 'image') it.filters = { ...NEUTRAL_FILTERS };
       });
@@ -818,11 +761,7 @@ export const useEditorStore = create<EditorState>()(
       if (idx < 0 || idx === items.length - 1) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const [m] = s.items.splice(idx, 1);
         s.items.push(m);
       });
@@ -835,11 +774,7 @@ export const useEditorStore = create<EditorState>()(
       if (idx <= 0) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const [m] = s.items.splice(idx, 1);
         s.items.unshift(m);
       });
@@ -852,11 +787,7 @@ export const useEditorStore = create<EditorState>()(
       if (idx < 0 || idx === items.length - 1) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const [m] = s.items.splice(idx, 1);
         s.items.splice(idx + 1, 0, m);
       });
@@ -869,11 +800,7 @@ export const useEditorStore = create<EditorState>()(
       if (idx <= 0) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const [m] = s.items.splice(idx, 1);
         s.items.splice(idx - 1, 0, m);
       });
@@ -897,14 +824,7 @@ export const useEditorStore = create<EditorState>()(
       const pending = get()._pending;
       if (!pending) return;
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) {
-          s.past.shift();
-          s.historyLabels.shift();
-        }
-        s.past.push(pending.snap);
-        s.historyLabels.push(pending.label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, pending.snap, pending.label);
         s._pending = null;
       });
     },
@@ -944,11 +864,7 @@ export const useEditorStore = create<EditorState>()(
       if (!it || it.type !== 'image') return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const item = s.items.find((i) => i.id === id);
         if (item && item.type === 'image') {
           item.crop = coverCrop(item.naturalWidth, item.naturalHeight, item.width, item.height);
@@ -1178,11 +1094,7 @@ export const useEditorStore = create<EditorState>()(
       if (!item || item.type !== 'image') return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const it = s.items.find((i) => i.id === id);
         if (!it || it.type !== 'image') return;
         if (axis === 'x') it.flipX = !it.flipX;
@@ -1196,11 +1108,7 @@ export const useEditorStore = create<EditorState>()(
       if (!item) return;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const it = s.items.find((i) => i.id === id);
         if (!it) return;
         // Items pivot on their top-left corner (x, y) — Konva's default with no
@@ -1251,11 +1159,7 @@ export const useEditorStore = create<EditorState>()(
       }
       const prev = snapshot(st);
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push('Move');
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, 'Move');
         move(s);
       });
       const past = get().past;
@@ -1271,11 +1175,7 @@ export const useEditorStore = create<EditorState>()(
       const label = `Align ${anchor}`;
       const prev = snapshot(get());
       set((s) => {
-        if (s.past.length >= HISTORY_LIMIT) { s.past.shift(); s.historyLabels.shift(); }
-        s.past.push(prev);
-        s.historyLabels.push(label);
-        s.future = [];
-        s.futureLabels = [];
+        pushStep(s, prev, label);
         const it = s.items.find((i) => i.id === selId);
         if (!it) return;
         // Real drawn size — a text box is as tall as all its wrapped lines, not

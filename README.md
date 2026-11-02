@@ -80,8 +80,8 @@ never leave your device.
   - Two open tabs saving at once can't delete each other's photos.
   - Opening another project, starting a new one, importing, or closing the tab
     asks first if there are unsaved changes (closing also asks while a save is
-    still being written); deleting a project always asks, and deleting the
-    open one closes it.
+    still being written); undoing back to what was saved counts as saved.
+    Deleting a project always asks, and deleting the open one closes it.
   - A save that fails (e.g. the browser's storage for the site is full) says
     so — it is never reported as "Saved" with photos missing.
   - Saving works in private windows too, Safari's included (Safari can't

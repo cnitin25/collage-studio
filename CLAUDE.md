@@ -63,6 +63,9 @@ specific to working here with Claude Code, or worth calling out twice.
   `e2e/prod/production.spec.ts` to cover the new resource. After a merge,
   `PROD_URL=https://offline-collage.vercel.app npm run test:prod` checks the
   live site.
+- Don't edit `src/` while the e2e suite is running against the dev server:
+  Vite reloads the pages under test, and the run fails with "Execution
+  context was destroyed" or a store that has suddenly emptied.
 - Playwright's WebKit build on Windows can crash under a full parallel run
   of both engines (worker exit code 3221226505). Rerun the failing specs
   alone (`--project=webkit`) before treating that as a bug; CI runs each

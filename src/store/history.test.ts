@@ -147,8 +147,63 @@ describe('arrow-key nudges', () => {
   });
 });
 
+describe('history steps', () => {
+  it('can share the state because committed state is frozen', () => {
+    // Steps hold references, not copies: that's only safe while immer freezes
+    // what it commits, so nothing can change a step after the fact.
+    s().addImages([photo()]);
+    expect(Object.isFrozen(s().items)).toBe(true);
+    expect(Object.isFrozen(s().items[0])).toBe(true);
+    expect(Object.isFrozen(s().canvas)).toBe(true);
+  });
+
+  it("hold the state they came from, not a copy: unchanged photos aren't duplicated", () => {
+    s().addImages([photo(), photo(800, 1200)]);
+    const before = s().items;
+    s().updateItem(firstId(), { width: 400 });
+    const step = s().past.at(-1)!;
+    expect(step.items).toBe(before);
+    expect(s().items[1]).toBe(before[1]);
+  });
+
+  it('of a gesture hold the state from before it began', () => {
+    s().addImages([photo()]);
+    const before = { items: s().items, canvas: s().canvas };
+    s().beginChange('Resize');
+    s().updateItemLive(firstId(), { width: 333 });
+    s().setBackgroundLive({ backgroundColor: '#000000' });
+    s().commitChange();
+    const step = s().past.at(-1)!;
+    expect(step.items).toBe(before.items);
+    expect(step.canvas).toBe(before.canvas);
+  });
+});
+
 describe('unsaved changes', () => {
   const markSaved = () => s().markSaved(savedRefOf(s()));
+
+  it('are none again after undoing back to the saved state', () => {
+    s().addImages([photo()]);
+    markSaved();
+    s().updateItem(firstId(), { width: 400 });
+    s().setBackground({ backgroundColor: '#123456' });
+    expect(hasUnsavedChanges(s())).toBe(true);
+    s().undo();
+    s().undo();
+    expect(hasUnsavedChanges(s())).toBe(false);
+    s().redo();
+    expect(hasUnsavedChanges(s())).toBe(true);
+  });
+
+  it('are none again after redoing forward to the saved state', () => {
+    s().addImages([photo()]);
+    s().updateItem(firstId(), { width: 400 });
+    markSaved();
+    s().undo();
+    expect(hasUnsavedChanges(s())).toBe(true);
+    s().redo();
+    expect(hasUnsavedChanges(s())).toBe(false);
+  });
 
   it('are none right after a save, and some after an edit', () => {
     s().addImages([photo()]);
