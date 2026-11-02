@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
  * Pointer-only: the target still scrolls natively for touch, wheel, keyboard
  * and assistive tech, so the rail itself is aria-hidden.
  */
-export default function ScrollRail({ targetRef }: { targetRef: RefObject<HTMLElement> }) {
+export default function ScrollRail({ targetRef }: { targetRef: RefObject<HTMLElement | null> }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState({ top: 0, size: 0, scrollable: false });
   const drag = useRef<{ y: number; scrollTop: number; ratio: number } | null>(null);

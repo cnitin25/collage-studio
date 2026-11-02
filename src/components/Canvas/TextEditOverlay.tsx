@@ -5,7 +5,7 @@ import { DEFAULT_LINE_HEIGHT, type TextItem } from '../../types';
 import { COARSE_QUERY, useMediaQuery } from '../../hooks/useMediaQuery';
 
 interface Props {
-  hostRef: RefObject<HTMLDivElement>;
+  hostRef: RefObject<HTMLDivElement | null>;
   getStage: () => Konva.Stage | null;
 }
 

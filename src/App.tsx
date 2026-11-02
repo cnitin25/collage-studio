@@ -89,7 +89,7 @@ export default function App() {
 
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; error: boolean; action?: ToastAction } | null>(null);
-  const toastTimer = useRef<number>();
+  const toastTimer = useRef<number | undefined>(undefined);
   const showToast = useCallback((text: string, error = false, action?: ToastAction) => {
     window.clearTimeout(toastTimer.current);
     setToast({ text, error, action });
@@ -383,7 +383,7 @@ export default function App() {
               return {
                 ...rootProps,
                 ref: (node: HTMLDivElement | null) => {
-                  (stageHostRef as { current: HTMLDivElement | null }).current = node;
+                  stageHostRef.current = node;
                   if (typeof dropzoneRef === 'function') dropzoneRef(node);
                   else if (dropzoneRef) (dropzoneRef as { current: HTMLElement | null }).current = node;
                 },
