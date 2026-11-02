@@ -3,10 +3,13 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "license": "GPL-3.0-or-later",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:prod": "playwright test -c playwright.prod.config.ts"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1"
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^26.6.6"
   }
 }

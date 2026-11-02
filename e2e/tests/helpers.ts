@@ -53,10 +53,10 @@ export async function addImage(
         ctx.fill();
       }
       const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/png'));
-      const store = (window as any).__editorStore;
+      const store = window.__editorStore;
       store.getState().addImages([{ src: URL.createObjectURL(blob), naturalWidth: w, naturalHeight: h }]);
       const items = store.getState().items;
-      return items[items.length - 1].id as string;
+      return items[items.length - 1].id;
     },
     { kind, w, h, fill },
   );
@@ -77,7 +77,7 @@ export async function analyzeExport<T, A = undefined>(
   analyze: (px: Px, width: number, height: number, arg: A) => T,
   arg?: A,
 ): Promise<T> {
-  const b64 = readFileSync((await download.path())!).toString('base64');
+  const b64 = readFileSync((await download.path())).toString('base64');
   return page.evaluate(
     async ({ b64, src, arg }) => {
       const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
@@ -92,7 +92,15 @@ export async function analyzeExport<T, A = undefined>(
         const i = (Math.round(y) * c.width + Math.round(x)) * 4;
         return [d[i], d[i + 1], d[i + 2], d[i + 3]];
       };
-      return new Function('px', 'w', 'h', 'arg', `return (${src})(px, w, h, arg);`)(px, c.width, c.height, arg);
+      // `analyze` arrives as source text: a function can't cross into the page.
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const run = new Function('px', 'w', 'h', 'arg', `return (${src})(px, w, h, arg);`) as (
+        px: (x: number, y: number) => number[],
+        w: number,
+        h: number,
+        arg: unknown,
+      ) => unknown;
+      return run(px, c.width, c.height, arg);
     },
     { b64, src: analyze.toString(), arg },
   ) as Promise<T>;
@@ -100,12 +108,12 @@ export async function analyzeExport<T, A = undefined>(
 
 /** Run an expression against the store's current state: `s` is getState(). */
 export function state<T>(page: Page, expr: string): Promise<T> {
-  return page.evaluate(`(() => { const s = window.__editorStore.getState(); return ${expr}; })()`) as Promise<T>;
+  return page.evaluate<T>(`(() => { const s = window.__editorStore.getState(); return ${expr}; })()`);
 }
 
 /** Call store actions: `s` is getState(). */
 export function act(page: Page, body: string): Promise<void> {
-  return page.evaluate(`(() => { const s = window.__editorStore.getState(); ${body}; })()`) as Promise<void>;
+  return page.evaluate<void>(`(() => { const s = window.__editorStore.getState(); ${body}; })()`);
 }
 
 /** Keys currently in one of the app's IndexedDB object stores. */
@@ -118,7 +126,7 @@ export function idbKeys(page: Page, storeName: 'projects' | 'assets'): Promise<s
         ? []
         : new Promise<string[]>((resolve, reject) => {
             const req = indexedDB.open('collage-studio');
-            req.onerror = () => reject(req.error);
+            req.onerror = () => reject(req.error ?? new Error('IndexedDB open failed'));
             req.onsuccess = () => {
               const db = req.result;
               if (!db.objectStoreNames.contains(storeName)) {
@@ -131,7 +139,7 @@ export function idbKeys(page: Page, storeName: 'projects' | 'assets'): Promise<s
                 db.close();
                 resolve(keysReq.result as string[]);
               };
-              keysReq.onerror = () => reject(keysReq.error);
+              keysReq.onerror = () => reject(keysReq.error ?? new Error('IndexedDB read failed'));
             };
           }),
     storeName,
@@ -169,7 +177,7 @@ export interface ImageStats {
  * exported 'redblue' image — i.e. how far a blur has spread that edge.
  */
 export async function redEdgeWidth(page: Page, download: Download): Promise<{ edge: number; imageWidth: number }> {
-  const b64 = readFileSync((await download.path())!).toString('base64');
+  const b64 = readFileSync((await download.path())).toString('base64');
   return page.evaluate(async (b64) => {
     const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
     const bmp = await createImageBitmap(new Blob([bytes]));
@@ -192,7 +200,7 @@ export async function redEdgeWidth(page: Page, download: Download): Promise<{ ed
 /** Decode a downloaded image in the browser and measure it. */
 export async function imageStats(page: Page, download: Download, downscaleTo?: number): Promise<ImageStats> {
   const path = await download.path();
-  const b64 = readFileSync(path!).toString('base64');
+  const b64 = readFileSync(path).toString('base64');
   return page.evaluate(
     async ({ b64, downscaleTo }) => {
       const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));

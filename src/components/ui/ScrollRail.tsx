@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 /**
- * An always-visible, finger-sized scrollbar for `target`. Phone browsers only
+ * An always-visible, finger-sized scrollbar for `targetRef`. Phone browsers only
  * show a thin overlay scrollbar while scrolling, and won't let a page widen,
  * pin or drag it, so swiping the content was the only way to scroll — and a
  * swipe that starts on a control operates the control. This rail gives the
@@ -11,13 +11,13 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
  * Pointer-only: the target still scrolls natively for touch, wheel, keyboard
  * and assistive tech, so the rail itself is aria-hidden.
  */
-export default function ScrollRail({ target }: { target: RefObject<HTMLElement> }) {
+export default function ScrollRail({ targetRef }: { targetRef: RefObject<HTMLElement> }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState({ top: 0, size: 0, scrollable: false });
   const drag = useRef<{ y: number; scrollTop: number; ratio: number } | null>(null);
 
   useEffect(() => {
-    const el = target.current;
+    const el = targetRef.current;
     const track = trackRef.current;
     if (!el || !track) return;
     const update = () => {
@@ -50,10 +50,10 @@ export default function ScrollRail({ target }: { target: RefObject<HTMLElement> 
       mo.disconnect();
       el.removeEventListener('scroll', update);
     };
-  }, [target]);
+  }, [targetRef]);
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const el = target.current;
+    const el = targetRef.current;
     const track = trackRef.current;
     if (!el || !track || !thumb.scrollable) return;
     e.preventDefault();
@@ -69,7 +69,7 @@ export default function ScrollRail({ target }: { target: RefObject<HTMLElement> 
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
-    const el = target.current;
+    const el = targetRef.current;
     if (!d || !el) return;
     el.scrollTop = d.scrollTop + (e.clientY - d.y) * d.ratio;
   };

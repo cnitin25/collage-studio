@@ -2,6 +2,9 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { act, addImage, state } from './helpers';
 
+/** The parts of an exported project file these specs read. */
+type ExportedFile = { items: { type: string; src?: string }[]; canvas: { backgroundImageSrc?: string } };
+
 // Portable project files (.collagestudio.json): only what's embedded in the
 // file is opened, a damaged or newer file is refused or trimmed with a
 // report, and every photo survives the round trip.
@@ -32,7 +35,7 @@ async function importFile(page: Page, file: unknown) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
 });
 
 test('a project file cannot make the app load anything from the internet', async ({ page }) => {
@@ -60,7 +63,7 @@ test('a project file cannot make the app load anything from the internet', async
     page.waitForEvent('download'),
     page.locator('.toolbar-secondary').getByRole('button', { name: 'Export', exact: true }).click(),
   ]);
-  expect(readFileSync((await download.path())!).length).toBeGreaterThan(1000);
+  expect(readFileSync((await download.path())).length).toBeGreaterThan(1000);
 });
 
 test('a project file from a newer version is refused with a clear message', async ({ page }) => {
@@ -109,10 +112,10 @@ test('a project file carries every photo and an unused background, and opens the
     page.waitForEvent('download'),
     page.getByRole('button', { name: /Export file/ }).click(),
   ]);
-  const path = (await download.path())!;
-  const file = JSON.parse(readFileSync(path, 'utf-8'));
-  expect(file.items.map((i: { type: string }) => i.type)).toEqual(['image', 'image', 'text']);
-  for (const it of file.items.filter((i: { type: string }) => i.type === 'image')) expect(it.src).toMatch(/^data:image\//);
+  const path = (await download.path());
+  const file = JSON.parse(readFileSync(path, 'utf-8')) as ExportedFile;
+  expect(file.items.map((i) => i.type)).toEqual(['image', 'image', 'text']);
+  for (const it of file.items.filter((i) => i.type === 'image')) expect(it.src).toMatch(/^data:image\//);
   expect(file.canvas.backgroundImageSrc).toMatch(/^data:image\//);
 
   page.once('dialog', (d) => d.accept());
@@ -121,9 +124,9 @@ test('a project file carries every photo and an unused background, and opens the
   await page.locator('.modal input[type=file]').setInputFiles(path);
   await expect.poll(() => state<number>(page, 's.items.length')).toBe(3);
   const sizes = await page.evaluate(async () => {
-    const s = (window as any).__editorStore.getState();
-    const srcs = [...s.items.filter((i: any) => i.type === 'image').map((i: any) => i.src), s.canvas.backgroundImageSrc];
-    return Promise.all(srcs.map(async (src: string) => (await (await fetch(src)).blob()).size));
+    const s = window.__editorStore.getState();
+    const srcs = [...s.items.flatMap((i) => (i.type === 'image' ? [i.src] : [])), s.canvas.backgroundImageSrc];
+    return Promise.all(srcs.map(async (src) => (await (await fetch(src!)).blob()).size));
   });
   expect(sizes).toHaveLength(3);
   for (const size of sizes) expect(size).toBeGreaterThan(100);

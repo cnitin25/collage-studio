@@ -5,7 +5,7 @@ import { act, addImage, state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
 });
 
 const items = (page: Page) => state<number>(page, 's.items.length');

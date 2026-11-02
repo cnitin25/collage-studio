@@ -74,7 +74,7 @@ test.describe('medium desktop width', () => {
 
   test('Duplicate, Delete, Clear canvas and the theme move into the ⋯ menu', async ({ page }) => {
     await page.goto('/');
-    await page.waitForFunction(() => !!(window as any).__editorStore);
+    await page.waitForFunction(() => !!window.__editorStore);
     const id = await addImage(page);
     await act(page, `s.select('${id}')`);
 

@@ -157,6 +157,9 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed, e
   const [scrollRequest, setScrollRequest] = useState<{ title: string; anchor: string | null } | null>(null);
   useEffect(() => {
     if (requestedPanel) {
+      // A one-shot request from elsewhere (the command search, a selection
+      // bar button), consumed below: answering it is what this effect is for.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setScrollRequest({ title: requestedPanel, anchor: requestedAnchor });
       setOpenId(requestedPanel);
       setNavGroupId(groupOf(requestedPanel).id);
@@ -397,7 +400,7 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed, e
       <HistoryPanel />
     </AccordionContext.Provider>
     </div>
-    {railNav && <ScrollRail target={paneRef} />}
+    {railNav && <ScrollRail targetRef={paneRef} />}
     </div>
     {/* Phones only (CSS): the status bar that carries these on desktop is hidden. */}
     <div className="inspector-modes">

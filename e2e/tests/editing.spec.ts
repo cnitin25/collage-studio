@@ -6,7 +6,7 @@ type Img = { x: number; y: number; width: number; height: number; crop?: Crop };
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
 });
 
 /** Drag a Transformer anchor, given its position in canvas coordinates. */

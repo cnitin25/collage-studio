@@ -394,7 +394,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     }
     if (croppingId) return;
     const target = e.target;
-    const clickedEmpty = target === target.getStage() || target.attrs.name === 'background';
+    const clickedEmpty = target === target.getStage() || target.name() === 'background';
     if (clickedEmpty) select(null);
   };
 
@@ -420,7 +420,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
 
   useEffect(() => {
     let cancelled = false;
-    document.fonts?.ready.then(() => {
+    void document.fonts?.ready.then(() => {
       if (!cancelled) stageRef.current?.batchDraw();
     });
     return () => {

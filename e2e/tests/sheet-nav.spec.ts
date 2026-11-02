@@ -8,7 +8,7 @@ const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile:
 
 async function setup(page: Page, select = true) {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
   const id = await addImage(page);
   await addImage(page);
   await act(page, `s.applyLayout({ type: 'grid' }); s.select(${select ? `'${id}'` : 'null'})`);
@@ -86,9 +86,9 @@ test.describe('phone', () => {
 
   test("the selection bar's Crop opens the sheet at the crop controls, photo still in view", async ({ page }) => {
     await setup(page);
-    const id = await page.evaluate(() => (window as any).__editorStore.getState().selectedId);
+    const id = await page.evaluate(() => window.__editorStore.getState().selectedId);
     await page.locator('.selection-bar').getByRole('button', { name: 'Crop' }).click();
-    await expect.poll(() => page.evaluate(() => (window as any).__editorStore.getState().croppingId)).toBe(id);
+    await expect.poll(() => page.evaluate(() => window.__editorStore.getState().croppingId)).toBe(id);
     await expect(page.locator('.inspector')).toHaveClass(/is-open/);
     await expect(page.locator('.nav-item', { hasText: 'Photo' })).toHaveAttribute('aria-current', 'page');
     // Scrolled past Size to the Crop controls, with Zoom on screen.

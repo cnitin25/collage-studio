@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import type Konva from 'konva';
 import { act, addImage, analyzeExport, exportImage, stageGeometry, state } from './helpers';
 
 // Mid-gesture rendering, snapping, progress feedback, colour, fonts and crash
@@ -8,17 +9,17 @@ type Box = { x: number; y: number; width: number; height: number };
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
 });
 
 /** Page position of a Transformer anchor ('middle-right', 'rotater', ...) and of the item it's on. */
 async function anchorGeometry(page: Page, id: string, anchor: string) {
   return page.evaluate(
     ({ id, anchor }) => {
-      const K = (window as any).Konva;
+      const K = window.Konva;
       const stage = K.stages[K.stages.length - 1];
-      const a = stage.findOne('Transformer').findOne('.' + anchor).getClientRect();
-      const n = stage.findOne('#' + id).getClientRect();
+      const a = stage.findOne<Konva.Transformer>('Transformer')!.findOne('.' + anchor)!.getClientRect();
+      const n = stage.findOne('#' + id)!.getClientRect();
       const r = stage.container().getBoundingClientRect();
       return {
         anchor: { x: r.left + a.x + a.width / 2, y: r.top + a.y + a.height / 2 },
@@ -37,9 +38,9 @@ test('a photo is cropped, not stretched, while a side handle is being dragged', 
   await page.mouse.down();
   await page.mouse.move(anchor.x + 150, anchor.y, { steps: 6 });
   const live = await page.evaluate((id) => {
-    const K = (window as any).Konva;
-    const group = K.stages[K.stages.length - 1].findOne('#' + id);
-    const img = group.findOne('Image');
+    const K = window.Konva;
+    const group = K.stages[K.stages.length - 1].findOne<Konva.Group>('#' + id)!;
+    const img = group.findOne<Konva.Image>('Image')!;
     const crop = img.crop();
     return {
       scaleX: group.scaleX(),
@@ -62,8 +63,8 @@ test('a text box rewraps while its handle is dragged, instead of stretching', as
   await page.mouse.down();
   await page.mouse.move(anchor.x - 120, anchor.y, { steps: 6 });
   const live = await page.evaluate((id) => {
-    const K = (window as any).Konva;
-    const node = K.stages[K.stages.length - 1].findOne('#' + id);
+    const K = window.Konva;
+    const node = K.stages[K.stages.length - 1].findOne('#' + id)!;
     return { scaleX: node.scaleX(), width: node.width() };
   }, id);
   await page.mouse.up();
@@ -126,7 +127,7 @@ test('adding photos shows progress, and so does preparing an export', async ({ p
   // Slow each photo's decode a little, so the progress is there to be seen.
   await page.evaluate(() => {
     const Original = window.Image;
-    (window as any).Image = class extends Original {
+    window.Image = class extends Original {
       set onload(fn: ((this: GlobalEventHandlers, ev: Event) => unknown) | null) {
         super.onload = fn ? (ev: Event) => setTimeout(() => fn.call(this, ev), 400) : null;
       }
@@ -142,6 +143,7 @@ test('adding photos shows progress, and so does preparing an export', async ({ p
   await expect(page.locator('.busy-indicator')).toBeHidden();
 
   await page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- re-applied to each call's own canvas
     const toBlob = HTMLCanvasElement.prototype.toBlob;
     HTMLCanvasElement.prototype.toBlob = function (this: HTMLCanvasElement, ...args: Parameters<typeof toBlob>) {
       setTimeout(() => toBlob.apply(this, args), 800);

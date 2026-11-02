@@ -6,7 +6,7 @@ import { act, addImage, analyzeExport, exportImage, state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
 });
 
 test('the collage frame border is its full width on every side and round the corners', async ({ page }) => {
@@ -99,9 +99,12 @@ test("lowering a photo's opacity shows what is behind it, not its shadow caster"
 test('masonry keeps the spacing the same down a column as across it', async ({ page }) => {
   const result = await page.evaluate(async () => {
     // Indirect import: the test runner must not rewrite a browser-side import().
-    const load = new Function('path', 'return import(path)') as (p: string) => Promise<any>;
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const load = new Function('path', 'return import(path)') as (
+      p: string,
+    ) => Promise<typeof import('../../src/layout/strategies')>;
     const { masonryLayout } = await load('/src/layout/strategies.ts');
-    const rects: { x: number; y: number; width: number; height: number }[] = masonryLayout(
+    const rects = masonryLayout(
       [1, 0.5, 2, 1.5, 0.8, 1.2],
       { canvasWidth: 1080, canvasHeight: 1080, margin: 24, gutter: 40, padding: 0 },
       2,

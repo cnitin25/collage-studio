@@ -32,10 +32,6 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
 
   const results = searchPanelCommands(query);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
-
   // Closes the dropdown on outside click/tap, same pattern used elsewhere
   // in the toolbar for its overflow menu.
   useEffect(() => {
@@ -61,6 +57,7 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
     if (isUnavailable(cmd)) return;
     requestPanel(cmd.panel);
     setQuery('');
+    setActiveIndex(0);
     setShowResults(false);
     onDone?.();
   };
@@ -91,7 +88,9 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
         className="command-search-input"
         value={query}
         onChange={(e) => {
+          // A new query starts back at the top of its results.
           setQuery(e.target.value);
+          setActiveIndex(0);
           setShowResults(true);
         }}
         onFocus={() => setShowResults(true)}

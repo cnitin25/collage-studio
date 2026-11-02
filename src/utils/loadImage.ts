@@ -118,7 +118,7 @@ export async function loadImageFiles(
     .filter((f) => !looksLikeImage(f))
     .map((f) => ({ name: f.name, reason: 'Not a recognized image file.' }));
 
-  const settled: PromiseSettledResult<LoadedImage>[] = new Array(candidates.length);
+  const settled = new Array<PromiseSettledResult<LoadedImage>>(candidates.length);
   let next = 0;
   let done = 0;
   const worker = async () => {

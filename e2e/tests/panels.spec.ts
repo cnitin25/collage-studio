@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import type Konva from 'konva';
 import { act, addImage, state } from './helpers';
 
 // Editor mode toggles (status bar / phone sheet footer), the Canvas panel's
@@ -50,7 +51,7 @@ test.describe('desktop', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForFunction(() => !!(window as any).__editorStore);
+    await page.waitForFunction(() => !!window.__editorStore);
   });
 
   test('mode toggles live in the status bar, highlighted while on', async ({ page }) => {
@@ -115,7 +116,7 @@ test.describe('phone', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForFunction(() => !!(window as any).__editorStore);
+    await page.waitForFunction(() => !!window.__editorStore);
     await page.locator('.toolbar-tools-toggle').click();
     await expect(page.locator('.inspector')).toHaveClass(/is-open/);
   });
@@ -167,7 +168,7 @@ test.describe('undo keeps your place', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForFunction(() => !!(window as any).__editorStore);
+    await page.waitForFunction(() => !!window.__editorStore);
   });
 
   test('undoing an enhancement keeps the photo selected and its panel open', async ({ page }) => {
@@ -194,7 +195,7 @@ test.describe('phone: sheet search, handles, undo', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForFunction(() => !!(window as any).__editorStore);
+    await page.waitForFunction(() => !!window.__editorStore);
   });
 
   test('the search field is hidden until the header search button opens it', async ({ page }) => {
@@ -228,11 +229,11 @@ test.describe('phone: sheet search, handles, undo', () => {
     const id = await addImage(page);
     await act(page, `s.applyLayout({ type: 'grid' }); s.select('${id}')`);
     const geo = await page.evaluate((id) => {
-      const K = (window as any).Konva;
+      const K = window.Konva;
       const stage = K.stages[K.stages.length - 1];
-      const tr = stage.findOne('Transformer');
-      const node = stage.findOne('#' + id);
-      const a = tr.findOne('.bottom-right').getClientRect();
+      const tr = stage.findOne<Konva.Transformer>('Transformer')!;
+      const node = stage.findOne('#' + id)!;
+      const a = tr.findOne('.bottom-right')!.getClientRect();
       const n = node.getClientRect();
       const r = stage.container().getBoundingClientRect();
       return { size: tr.anchorSize(), padding: tr.padding(), a, n, left: r.left, top: r.top };

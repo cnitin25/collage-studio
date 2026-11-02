@@ -271,7 +271,7 @@ export default function App() {
     setBusy('Preparing image…');
     let blob: Blob | null = null;
     let fileName = '';
-    let scale = 1;
+    let scale: number;
     try {
       // Deselect so the transformer handles aren't baked into the export. Two
       // frames: one for that, one for the busy indicator to paint before the
@@ -360,8 +360,8 @@ export default function App() {
       <Toolbar
         onAddImages={open}
         onAddText={addText}
-        onExport={handleExport}
-        onSave={handleSave}
+        onExport={() => void handleExport()}
+        onSave={() => void handleSave()}
         onOpenProjects={() => setProjectsOpen(true)}
         onClearCanvas={handleClearCanvas}
         onToggleAutoSave={toggleAutoSave}
@@ -377,7 +377,9 @@ export default function App() {
               // which would silently clobber stageHostRef (spread order) —
               // merge both so the dropzone and TextEditOverlay's position
               // math share the same DOM node.
-              const { ref: dropzoneRef, ...rootProps } = getRootProps();
+              const { ref, ...rootProps } = getRootProps();
+              // Typed only by the props' index signature (any).
+              const dropzoneRef = ref as React.Ref<HTMLElement> | undefined;
               return {
                 ...rootProps,
                 ref: (node: HTMLDivElement | null) => {
@@ -437,7 +439,7 @@ export default function App() {
         />
       </div>
       <StatusBar />
-      <ProjectsModal open={projectsOpen} onClose={() => setProjectsOpen(false)} />
+      {projectsOpen && <ProjectsModal onClose={() => setProjectsOpen(false)} />}
       {toast && (
         <div className={`toast ${toast.error ? 'is-error' : ''}`} role={toast.error ? 'alert' : 'status'}>
           {toast.text}

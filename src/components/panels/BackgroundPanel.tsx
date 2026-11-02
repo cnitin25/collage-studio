@@ -67,6 +67,9 @@ export default function BackgroundPanel() {
     setLoading(true);
     try {
       setPalette(await extractPalette(paletteSource, 6));
+    } catch {
+      // The photo is already on the canvas, so this only fails if its data is
+      // gone; keep whatever palette was showing.
     } finally {
       setLoading(false);
     }
@@ -185,7 +188,7 @@ export default function BackgroundPanel() {
           <button className="btn full" style={{ marginTop: 10 }} onClick={() => fileRef.current?.click()}>
             Upload image
           </button>
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUpload} />
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void onUpload(e)} />
           <div className="sliders" style={{ marginTop: 12 }}>
             <Slider
               label="Blur"
@@ -236,7 +239,7 @@ export default function BackgroundPanel() {
         <button
           className="link-btn"
           disabled={!paletteSource || loading}
-          onClick={runExtract}
+          onClick={() => void runExtract()}
           title="Pull a color palette from the selected (or first) photo"
         >
           {loading ? 'Reading…' : 'From photo'}

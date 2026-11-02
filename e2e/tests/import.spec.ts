@@ -7,7 +7,7 @@ import { state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
 });
 
 /** Encode a w×h test image in the page and return its bytes. */

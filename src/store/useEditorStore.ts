@@ -299,7 +299,7 @@ function layoutToDraft(s: Draft<EditorState>, spec: LayoutSpec): void {
   // inferred order from current pixel position instead; that was unstable for
   // Mosaic, where a tall spanning cell's center sits ambiguously between rows,
   // so small margin/spacing changes could reshuffle photos unpredictably.
-  const imageItems = s.items.filter((it) => it.type === 'image') as Draft<ImageItem>[];
+  const imageItems = s.items.filter((it): it is Draft<ImageItem> => it.type === 'image');
   if (imageItems.length === 0) return;
   const aspects = imageItems.map((it) => it.naturalWidth / it.naturalHeight);
   const rects = computeLayout(aspects, spec, {

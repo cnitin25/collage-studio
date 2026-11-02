@@ -1,4 +1,19 @@
-import type { BackgroundType, CanvasConfig, CollageItem, ImageItem, StickerItem, TextItem } from '../types';
+import type {
+  BackgroundType,
+  BaseItem,
+  BorderStyle,
+  CanvasConfig,
+  ClipShape,
+  CollageItem,
+  EnhancePresetId,
+  ImageFilters,
+  ImageItem,
+  PatternKind,
+  ShadowStyle,
+  StickerItem,
+  TextAlign,
+  TextItem,
+} from '../types';
 import type { LayoutSpec, LayoutType, SpacingOptions } from '../layout/types';
 import { uid } from '../utils/id';
 import { downloadBlob } from '../utils/exportStage';
@@ -124,13 +139,151 @@ export interface ImportedProject {
   skipped: SkippedPart[];
 }
 
-const LAYOUT_TYPES: readonly LayoutType[] = ['grid', 'justified', 'mosaic', 'masonry', 'spotlight'];
-const BACKGROUND_TYPES: readonly BackgroundType[] = ['color', 'gradient', 'image', 'pattern'];
-const ALIGNS = ['left', 'center', 'right'] as const;
+type Json = Record<string, unknown>;
 
+const isRecord = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isPos = (v: unknown): v is number => isNum(v) && v > 0;
 const isStr = (v: unknown): v is string => typeof v === 'string';
+
+// Field readers: each returns the value if it's usable, else undefined.
+const num = (v: unknown) => (isNum(v) ? v : undefined);
+const nonNeg = (v: unknown) => (isNum(v) && v >= 0 ? v : undefined);
+const pos = (v: unknown) => (isPos(v) ? v : undefined);
+const str = (v: unknown) => (isStr(v) ? v : undefined);
+const bool = (v: unknown) => (typeof v === 'boolean' ? v : undefined);
+const within = (lo: number, hi: number) => (v: unknown) => (isNum(v) ? Math.min(hi, Math.max(lo, v)) : undefined);
+const count = (v: unknown) => (isNum(v) && Number.isInteger(v) && v >= 0 ? v : undefined);
+const atLeastOne = (v: unknown) => (isNum(v) && Number.isInteger(v) && v >= 1 ? v : undefined);
+/** Every member of a string union, listed once: a member added to the type without one here fails the build. */
+const members = <T extends string>(all: Record<T, true>) => Object.keys(all) as T[];
+const oneOf =
+  <T extends string>(values: readonly T[]) =>
+  (v: unknown) =>
+    values.find((x) => x === v);
+
+/**
+ * One reader per field of T. Building items from these, rather than spreading
+ * the parsed object, keeps anything the editor doesn't know out of its state —
+ * and, because the map must name every field, adding a field to a type
+ * without teaching the importer about it is a compile error rather than data
+ * silently dropped on import.
+ */
+type Readers<T> = { [K in keyof T]-?: (v: unknown) => T[K] | undefined };
+
+function read<T>(raw: Json, readers: Readers<T>): Partial<T> {
+  const out: Partial<T> = {};
+  for (const key of Object.keys(readers) as (keyof T & string)[]) {
+    const value = readers[key](raw[key]);
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+const LAYOUT_TYPES = members<LayoutType>({ grid: true, justified: true, mosaic: true, masonry: true, spotlight: true });
+const BACKGROUND_TYPES = members<BackgroundType>({ color: true, gradient: true, image: true, pattern: true });
+const PATTERN_KINDS = members<PatternKind>({ dots: true, grid: true, stripes: true, checker: true });
+const BORDER_STYLES = members<BorderStyle>({ solid: true, dashed: true, dotted: true, glyph: true });
+const CLIP_SHAPES = members<ClipShape>({ rect: true, circle: true, ellipse: true, heart: true });
+const ALIGNS = members<TextAlign>({ left: true, center: true, right: true });
+const PRESET_IDS = members<EnhancePresetId>({
+  brighten: true,
+  darken: true,
+  antique: true,
+  vivid: true,
+  warm: true,
+  auto: true,
+});
+
+const BASE: Readers<Omit<BaseItem, 'id' | 'type'>> = {
+  x: num,
+  y: num,
+  width: pos,
+  height: pos,
+  rotation: num,
+  opacity: within(0, 100),
+  cornerRadius: nonNeg,
+  borderColor: str,
+  borderWidth: nonNeg,
+};
+
+const FILTERS: Readers<ImageFilters> = {
+  brightness: within(-100, 100),
+  contrast: within(-100, 100),
+  saturation: within(-100, 100),
+  blur: within(0, 40),
+  hue: within(-180, 180),
+  warmth: within(-100, 100),
+  enhance: within(0, 100),
+  grayscale: bool,
+  sepia: bool,
+  presetId: oneOf(PRESET_IDS),
+  presetStrength: within(0, 100),
+};
+
+const SHADOW: Readers<ShadowStyle> = {
+  color: str,
+  blur: nonNeg,
+  opacity: within(0, 1),
+  offsetX: num,
+  offsetY: num,
+};
+
+const CROP: Readers<NonNullable<ImageItem['crop']>> = { x: nonNeg, y: nonNeg, width: pos, height: pos };
+
+/** A nested object whose fields are all required: all of them usable, or none. */
+function readWhole<T>(raw: unknown, readers: Readers<T>): T | undefined {
+  if (!isRecord(raw)) return undefined;
+  const out = read(raw, readers);
+  return Object.keys(out).length === Object.keys(readers).length ? (out as T) : undefined;
+}
+
+const IMAGE: Readers<Omit<ImageItem, keyof BaseItem | 'src' | 'assetId'>> = {
+  naturalWidth: pos,
+  naturalHeight: pos,
+  crop: (v) => readWhole(v, CROP),
+  filters: (v) => (isRecord(v) ? read(v, FILTERS) : undefined),
+  shadow: (v) => readWhole(v, SHADOW),
+  frame: str,
+  borderStyle: oneOf(BORDER_STYLES),
+  borderGlyph: str,
+  clipShape: oneOf(CLIP_SHAPES),
+  flipX: bool,
+  flipY: bool,
+};
+
+const TEXT: Readers<Omit<TextItem, keyof BaseItem>> = {
+  text: str,
+  fontFamily: str,
+  fontSize: pos,
+  fontStyle: str,
+  fill: str,
+  align: oneOf(ALIGNS),
+  lineHeight: pos,
+};
+
+const STICKER: Readers<Omit<StickerItem, keyof BaseItem>> = { emoji: str, fontSize: pos };
+
+const CANVAS: Readers<Omit<CanvasConfig, 'backgroundImageSrc' | 'backgroundAssetId'>> = {
+  width: pos,
+  height: pos,
+  backgroundType: oneOf(BACKGROUND_TYPES),
+  backgroundColor: str,
+  gradientFrom: str,
+  gradientTo: str,
+  gradientAngle: num,
+  backgroundBlur: nonNeg,
+  patternKind: oneOf(PATTERN_KINDS),
+  patternColor: str,
+  patternBg: str,
+  patternScale: pos,
+  frameBorderWidth: nonNeg,
+  frameBorderColor: str,
+  frameCornerRadius: nonNeg,
+};
+
+const SPACING: Readers<SpacingOptions> = { margin: nonNeg, gutter: nonNeg, padding: nonNeg };
+const LAYOUT: Readers<LayoutSpec> = { type: oneOf(LAYOUT_TYPES), cols: atLeastOne, heroIndex: count };
 
 const NOT_EMBEDDED =
   "It links to an outside address. Only photos embedded in the file are opened — nothing is ever fetched from the internet.";
@@ -145,13 +298,13 @@ const NOT_EMBEDDED =
  */
 export async function importProjectFile(file: File): Promise<ImportedProject> {
   const text = await file.text();
-  let raw: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
     throw new Error('This file is not valid JSON.');
   }
-  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.items) || !raw.canvas || typeof raw.canvas !== 'object') {
+  if (!isRecord(raw) || !Array.isArray(raw.items) || !isRecord(raw.canvas)) {
     throw new Error('This file is not a Collage Studio project.');
   }
   if (isNum(raw.fileVersion) && raw.fileVersion > FILE_VERSION) {
@@ -159,8 +312,8 @@ export async function importProjectFile(file: File): Promise<ImportedProject> {
       'This project was saved by a newer version of Collage Studio. Reload the app to update it, then import it again.',
     );
   }
-  const c = raw.canvas;
-  if (!isPos(c.width) || !isPos(c.height) || c.width > 20_000 || c.height > 20_000) {
+  const c = read(raw.canvas, CANVAS);
+  if (!c.width || !c.height || c.width > 20_000 || c.height > 20_000) {
     throw new Error("This project's canvas size is missing or not valid.");
   }
 
@@ -168,12 +321,18 @@ export async function importProjectFile(file: File): Promise<ImportedProject> {
   const items: CollageItem[] = [];
   let photos = 0;
   let texts = 0;
-  for (const it of raw.items) {
-    const placed = it && isNum(it.x) && isNum(it.y);
-    const rotation = isNum(it?.rotation) ? it.rotation : 0;
-    if (it?.type === 'image') {
+  for (const it of raw.items as unknown[]) {
+    const kind = isRecord(it) ? it.type : undefined;
+    const base: Partial<Omit<BaseItem, 'id' | 'type'>> = isRecord(it) ? read(it, BASE) : {};
+    const { x, y } = base;
+    const placed = x !== undefined && y !== undefined;
+    const rotation = base.rotation ?? 0;
+    if (kind === 'image' && isRecord(it)) {
       const label = `Photo ${++photos}`;
-      if (!placed || !isPos(it.width) || !isPos(it.height) || !isPos(it.naturalWidth) || !isPos(it.naturalHeight)) {
+      const image = read(it, IMAGE);
+      const { width, height } = base;
+      const { naturalWidth, naturalHeight } = image;
+      if (!placed || !width || !height || !naturalWidth || !naturalHeight) {
         skipped.push({ name: label, reason: 'Its size or position is missing.' });
         continue;
       }
@@ -189,46 +348,80 @@ export async function importProjectFile(file: File): Promise<ImportedProject> {
         skipped.push({ name: label, reason: "The embedded photo couldn't be read." });
         continue;
       }
-      items.push({ ...(it as ImageItem), rotation, src, id: uid('img'), assetId: uid('asset') });
-    } else if (it?.type === 'text') {
+      // A crop reaching outside the photo draws nothing in some browsers.
+      const { crop } = image;
+      const cropFits =
+        !crop || (crop.x + crop.width <= naturalWidth + 0.5 && crop.y + crop.height <= naturalHeight + 0.5);
+      items.push({
+        ...base,
+        ...image,
+        crop: cropFits ? crop : undefined,
+        type: 'image',
+        id: uid('img'),
+        x,
+        y,
+        width,
+        height,
+        rotation,
+        naturalWidth,
+        naturalHeight,
+        src,
+        assetId: uid('asset'),
+      });
+    } else if (kind === 'text' && isRecord(it)) {
       const label = `Text ${++texts}`;
-      if (!placed || !isPos(it.width) || !isStr(it.text) || !isPos(it.fontSize)) {
+      const t = read(it, TEXT);
+      const { width } = base;
+      const { text, fontSize } = t;
+      if (!placed || !width || text === undefined || !fontSize) {
         skipped.push({ name: label, reason: 'Its text, size or position is missing.' });
         continue;
       }
-      const item: TextItem = {
-        ...(it as TextItem),
-        rotation,
-        height: isPos(it.height) ? it.height : it.fontSize * 1.4,
-        fontFamily: isStr(it.fontFamily) ? it.fontFamily : 'Inter, system-ui, sans-serif',
-        fontStyle: isStr(it.fontStyle) ? it.fontStyle : 'normal',
-        fill: isStr(it.fill) ? it.fill : '#15171d',
-        align: ALIGNS.includes(it.align) ? it.align : 'center',
+      items.push({
+        ...base,
+        ...t,
+        type: 'text',
         id: uid('txt'),
-      };
-      items.push(item);
-    } else if (it?.type === 'sticker') {
-      if (!placed || !isStr(it.emoji) || !isPos(it.fontSize)) {
+        x,
+        y,
+        width,
+        height: base.height ?? fontSize * 1.4,
+        rotation,
+        text,
+        fontSize,
+        fontFamily: t.fontFamily ?? 'Inter, system-ui, sans-serif',
+        fontStyle: t.fontStyle ?? 'normal',
+        fill: t.fill ?? '#15171d',
+        align: t.align ?? 'center',
+      });
+    } else if (kind === 'sticker' && isRecord(it)) {
+      const s = read(it, STICKER);
+      const { emoji, fontSize } = s;
+      if (!placed || emoji === undefined || !fontSize) {
         skipped.push({ name: 'A sticker', reason: 'Its emoji, size or position is missing.' });
         continue;
       }
-      const item: StickerItem = {
-        ...(it as StickerItem),
-        rotation,
-        width: it.fontSize,
-        height: it.fontSize,
+      items.push({
+        ...base,
+        type: 'sticker',
         id: uid('stk'),
-      };
-      items.push(item);
+        x,
+        y,
+        width: fontSize,
+        height: fontSize,
+        rotation,
+        emoji,
+        fontSize,
+      });
     } else {
-      skipped.push({ name: 'An item', reason: `Its kind ("${String(it?.type)}") isn't one this version knows.` });
+      skipped.push({ name: 'An item', reason: `Its kind ("${String(kind)}") isn't one this version knows.` });
     }
   }
 
   // A blob: URL inside a file is always dead — it belonged to the page that
   // exported it (older exports stored the background image this way).
   let bgSrc: string | undefined;
-  const bg = c.backgroundImageSrc;
+  const bg = raw.canvas.backgroundImageSrc;
   if (isStr(bg) && EMBEDDED_IMAGE.test(bg)) {
     bgSrc = await dataUrlToObjectUrl(bg);
     if (!bgSrc) skipped.push({ name: 'Background image', reason: "The embedded image couldn't be read." });
@@ -237,24 +430,26 @@ export async function importProjectFile(file: File): Promise<ImportedProject> {
   }
 
   const canvas: CanvasConfig = {
-    ...(c as CanvasConfig),
-    backgroundType: BACKGROUND_TYPES.includes(c.backgroundType) ? c.backgroundType : 'color',
-    backgroundColor: isStr(c.backgroundColor) ? c.backgroundColor : '#ffffff',
+    ...c,
+    width: c.width,
+    height: c.height,
+    backgroundType: c.backgroundType ?? 'color',
+    backgroundColor: c.backgroundColor ?? '#ffffff',
     backgroundImageSrc: bgSrc,
     backgroundAssetId: bgSrc ? uid('asset') : undefined,
   };
+
+  // Layout code dereferences spacing.margin etc. unconditionally, so a file
+  // without it (hand-edited, or truncated) would crash the editor.
+  const spacing = readWhole(raw.spacing, SPACING) ?? { margin: 24, gutter: 12, padding: 0 };
+  const layout = isRecord(raw.lastLayout) ? read(raw.lastLayout, LAYOUT) : {};
 
   return {
     name: isStr(raw.name) && raw.name.trim() ? raw.name : 'Imported project',
     canvas,
     items,
-    // Layout code dereferences spacing.margin etc. unconditionally, so a file
-    // without it (hand-edited, or truncated) would crash the editor.
-    spacing:
-      raw.spacing && isNum(raw.spacing.margin) && isNum(raw.spacing.gutter) && isNum(raw.spacing.padding)
-        ? raw.spacing
-        : { margin: 24, gutter: 12, padding: 0 },
-    lastLayout: raw.lastLayout && LAYOUT_TYPES.includes(raw.lastLayout.type) ? raw.lastLayout : null,
+    spacing,
+    lastLayout: layout.type ? { ...layout, type: layout.type } : null,
     skipped,
   };
 }

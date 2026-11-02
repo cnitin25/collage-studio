@@ -31,6 +31,6 @@ export function useReplacePhoto() {
   return {
     available,
     open: () => ref.current?.click(),
-    input: <input ref={ref} type="file" accept="image/*" hidden onChange={onChange} />,
+    input: <input ref={ref} type="file" accept="image/*" hidden onChange={(e) => void onChange(e)} />,
   };
 }

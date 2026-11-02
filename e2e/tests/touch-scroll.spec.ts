@@ -22,7 +22,7 @@ async function swipe(page: Page, from: { x: number; y: number }, dx: number, dy:
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
   const id = await addImage(page);
   await addImage(page);
   await act(page, `s.applyLayout({ type: 'grid' }); s.select('${id}')`);

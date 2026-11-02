@@ -49,7 +49,7 @@ export async function convertHeicToJpeg(file: File): Promise<Blob> {
     ]);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    throw new Error(`This HEIC/HEIF photo could not be converted (${detail}).`);
+    throw new Error(`This HEIC/HEIF photo could not be converted (${detail}).`, { cause: err });
   } finally {
     window.clearTimeout(timer);
   }

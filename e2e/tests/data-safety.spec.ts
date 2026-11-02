@@ -6,7 +6,7 @@ import { act, addImage, idbKeys, state } from './helpers';
 // lose a photo — to another tab's cleanup, or to a background type switch.
 
 async function ready(page: Page) {
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
 }
 
 async function save(page: Page) {
@@ -29,16 +29,16 @@ async function storedProject(page: Page) {
     (id) =>
       new Promise<{ items: number; assetIds: string[] } | null>((resolve, reject) => {
         const req = indexedDB.open('collage-studio');
-        req.onerror = () => reject(req.error);
+        req.onerror = () => reject(req.error ?? new Error('IndexedDB open failed'));
         req.onsuccess = () => {
           const db = req.result;
           const get = db.transaction('projects').objectStore('projects').get(id);
           get.onsuccess = () => {
             db.close();
-            const p = get.result;
-            resolve(p ? { items: p.state.items.length, assetIds: p.state.items.map((i: any) => i.assetId) } : null);
+            const p = get.result as { state: { items: { assetId: string }[] } } | undefined;
+            resolve(p ? { items: p.state.items.length, assetIds: p.state.items.map((i) => i.assetId) } : null);
           };
-          get.onerror = () => reject(get.error);
+          get.onerror = () => reject(get.error ?? new Error('IndexedDB read failed'));
         };
       }),
     id,
@@ -157,7 +157,7 @@ test('an uploaded background survives switching the background type before savin
     c.height = 200;
     c.getContext('2d')!.fillRect(0, 0, 300, 200);
     const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!)));
-    const store = (window as any).__editorStore;
+    const store = window.__editorStore;
     store.getState().setBackground({
       backgroundType: 'image',
       backgroundImageSrc: URL.createObjectURL(blob),
@@ -200,6 +200,78 @@ test('clearing a saved collage is saved too, so reopening it does not bring the 
   await act(page, 's.clearAll()');
   await hidePage(page);
   await expect.poll(async () => (await storedProject(page))?.items).toBe(0);
+});
+
+/** Size and type of the photo a blob: URL points at, read in the page. */
+const photoAt = (page: Page, src: string) =>
+  page.evaluate(async (src) => {
+    const blob = await (await fetch(src)).blob();
+    return { size: blob.size, type: blob.type };
+  }, src);
+
+test('saving works where IndexedDB cannot store a Blob, as in a Safari private window', async ({ page }) => {
+  // What Safari does in a private window (WebKit bugs 188438 and 268037):
+  // any record holding a Blob is refused.
+  await page.evaluate(() => {
+    for (const method of ['put', 'add'] as const) {
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- re-applied to each call's own store
+      const original = IDBObjectStore.prototype[method];
+      IDBObjectStore.prototype[method] = function (this: IDBObjectStore, ...args: Parameters<IDBObjectStore['put']>) {
+        const value: unknown = args[0];
+        const fields = typeof value === 'object' && value !== null ? Object.values(value) : [];
+        if (value instanceof Blob || fields.some((v) => v instanceof Blob)) {
+          throw new DOMException('Error preparing Blob/File data to be stored in object store', 'UnknownError');
+        }
+        return original.apply(this, args);
+      };
+    }
+  });
+  await addImage(page);
+  const before = await photoAt(page, await state<string>(page, 's.items[0].src'));
+  await save(page);
+
+  await page.reload();
+  await ready(page);
+  await expect.poll(() => state<number>(page, 's.items.length')).toBe(1);
+  expect(await photoAt(page, await state<string>(page, 's.items[0].src'))).toEqual(before);
+});
+
+test('photos stored as Blobs by earlier versions still open', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit', "WebKit's test contexts can't store a Blob in IndexedDB at all");
+  await addImage(page);
+  const before = await photoAt(page, await state<string>(page, 's.items[0].src'));
+  await save(page);
+  // Rewrite every stored photo the way earlier versions stored it.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open('collage-studio');
+        req.onerror = () => reject(req.error ?? new Error('IndexedDB open failed'));
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('assets', 'readwrite');
+          const store = tx.objectStore('assets');
+          const all = store.getAll();
+          all.onsuccess = () => {
+            type Rec = { id: string; blob?: Blob; bytes?: ArrayBuffer; type?: string };
+            for (const rec of all.result as Rec[]) {
+              const blob = rec.blob ?? new Blob([rec.bytes!], { type: rec.type });
+              store.put({ id: rec.id, blob });
+            }
+          };
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error ?? new Error('IndexedDB write failed'));
+        };
+      }),
+  );
+
+  await page.reload();
+  await ready(page);
+  await expect.poll(() => state<number>(page, 's.items.length')).toBe(1);
+  expect(await photoAt(page, await state<string>(page, 's.items[0].src'))).toEqual(before);
 });
 
 test.describe('phone', () => {

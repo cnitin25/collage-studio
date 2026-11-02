@@ -84,6 +84,11 @@ never leave your device.
     open one closes it.
   - A save that fails (e.g. the browser's storage for the site is full) says
     so — it is never reported as "Saved" with photos missing.
+  - Saving works in private windows too, Safari's included (Safari can't
+    store a photo file in a private window, so photos are stored as their
+    bytes). Projects in a private window are gone once it closes.
+  - If the saved projects can't be read, opened or deleted, the Projects
+    dialog says why instead of staying empty.
   - Stored photos no saved project uses any more (deleted projects, replaced
     photos) are cleaned up automatically, so storage doesn't only ever grow.
   - Clear canvas doesn't ask first; it shows an **Undo** button instead.
@@ -182,6 +187,9 @@ A single-user, no-signup tool for quickly assembling a photo collage
 
 ## Running it
 
+Needs Node.js 26 (`engines` in `package.json`; Vercel and CI build with the
+latest 26.x release).
+
 ```bash
 npm install
 npm run dev      # dev server, printed URL (default http://localhost:5173)
@@ -193,13 +201,30 @@ npm run preview   # serve the build locally (offline/PWA install only works here
 ```
 
 ```bash
-cd e2e && npm install   # first time only
+npm run lint        # ESLint, type-aware (src/ and the e2e specs)
+npm run typecheck   # the app, vite.config.ts and the e2e specs
+```
+
+```bash
+cd e2e && npm install                          # first time only
+npx playwright install chromium webkit         # first time only
 npm run test:e2e        # Playwright e2e suite (spins up the dev server itself)
+npm run test:prod       # production build under the real security headers
 ```
 
 The suite reuses anything already listening on port 5173 — if another app's
 dev server is running there, every test runs against *that* app and fails.
-Stop it first.
+Stop it first. `npm run test:e2e -- --project=chromium` skips WebKit for a
+quicker run.
+
+`npm run test:prod` builds the app, serves it with `vercel.json`'s headers
+(the Content-Security-Policy included) and drives every feature the policy
+could block. Set `PROD_URL` to run it against a deployment instead:
+`PROD_URL=https://offline-collage.vercel.app npm run test:prod`.
+
+Every push and pull request runs lint, type-check, the e2e suite on Chromium
+and WebKit, and the production smoke test on GitHub Actions
+(`.github/workflows/ci.yml`).
 
 To use it from another device on the same network (e.g. a phone), run
 `npm run dev:lan` (development) or `npm run build && npm run preview:lan`
@@ -213,6 +238,8 @@ To use it from another device on the same network (e.g. a phone), run
 - **IndexedDB** (via a small wrapper in `src/storage/`) — project + image
   persistence
 - **react-dropzone**, **heic2any** — file ingestion, including HEIC decode
+- **Playwright** (Chromium and WebKit), **ESLint** with typescript-eslint and
+  the React Hooks rules, **GitHub Actions** — checks on every change
 
 ## Project structure
 
@@ -248,9 +275,16 @@ src/
                              feature area (a bottom sheet, or a side panel in
                              landscape, on the phone layout)
 e2e/                        standalone Playwright project (its own
-                             package.json); `npm run test:e2e` at the repo
-                             root drives it
+                             package.json and tsconfig); `npm run test:e2e`
+                             at the repo root drives it. The storage, file,
+                             import/export and phone specs also run on WebKit
+  prod/production.spec.ts    production-build smoke test under the CSP
+                             (`npm run test:prod`)
+  fixtures/                  a JPEG and a HEIC photo for the smoke test
   tests/
+    globals.d.ts             types the dev-only store hook from the app's
+                             own source, so specs fail to compile on a
+                             renamed action
     mobile.spec.ts           bottom sheet, landscape side panel, toolbar and
                              overflow menu, selection bar, docked text editor,
                              touch sizing, pinch-zoom (anchoring, margin
@@ -274,7 +308,9 @@ e2e/                        standalone Playwright project (its own
     export-filename.spec.ts  export file name following the project name
     data-safety.spec.ts      auto-save default + toggle, reopening the last
                              project, crash-loop guard, cross-tab saves, kept
-                             backgrounds, database repair, phone toolbar fit
+                             backgrounds, database repair, saving where Blobs
+                             can't be stored, older Blob records, phone
+                             toolbar fit
     rendering.spec.ts        frame and photo borders at full width and inside,
                              opacity vs shadow, masonry gaps, frame presets
     input.spec.ts            arrow-key undo, Projects dialog keyboard, Space
@@ -286,6 +322,8 @@ e2e/                        standalone Playwright project (its own
                              any zoom, progress, warmth, fonts, crash recovery
     helpers.ts               store access, generated test images, image metrics,
                              export pixel analysis
+.github/workflows/ci.yml     lint, type-check, e2e (Chromium, WebKit) and the
+                             production smoke test on every push and PR
 ```
 
 ## Known limitations
@@ -293,14 +331,17 @@ e2e/                        standalone Playwright project (its own
 - Single-user, single-browser: projects saved via IndexedDB stay on that
   device/browser and aren't synced elsewhere (use the portable `.json`
   export to move a project to another device or browser).
-- The phone layout is tested in Chromium's mobile emulation, not on real
-  devices: check iOS Safari and Android Chrome by hand (`npm run dev:lan`)
-  after changing it — share sheet, keyboard behaviour and safe areas in
-  particular can't be emulated.
+- The phone layout is tested in emulation (Chromium, and WebKit for the
+  storage, file and phone specs), not on real devices: check iOS Safari and
+  Android Chrome by hand (`npm run dev:lan`) after changing it — share
+  sheet, keyboard behaviour and safe areas in particular can't be emulated.
+  The two-finger pinch tests run on Chromium only, since they send touches
+  through the Chrome DevTools Protocol.
 - The Playwright suite (`e2e/`) covers the mobile responsive layout,
   project storage and recovery, rendering/export output, input handling,
   project files, cropping and the Insert panel; the rest of the editor is
-  verified manually plus TypeScript's compiler checks (`npm run build`).
+  verified manually plus TypeScript and ESLint (`npm run typecheck`,
+  `npm run lint`).
 - Konva is split into its own vendor chunk (`vite.config.ts`) so app-code
   updates don't force a re-download of it, but it still loads on first
   visit since the canvas is needed immediately — there's no further win
@@ -318,3 +359,20 @@ e2e/                        standalone Playwright project (its own
   top of the canvas. Use the 90° rotate buttons for those.
 - One item is selected at a time: no multi-select, grouping, or aligning
   items to each other.
+
+## Licence
+
+Collage Studio is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option)
+any later version. It is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; see [LICENSE](LICENSE) for the full terms.
+
+Bundled third-party code and fonts keep their own licences:
+
+- React, Konva, react-konva, Zustand, Immer, react-dropzone, use-image and
+  heic2any — MIT; idb — ISC.
+- heic2any includes a build of [libheif](https://github.com/strukturag/libheif)
+  (LGPL-3.0) for decoding HEIC photos.
+- Inter, Anton, Pacifico, Dancing Script, Caveat and Great Vibes (via
+  Fontsource) — SIL Open Font License 1.1.

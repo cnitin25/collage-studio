@@ -35,8 +35,24 @@ function db(): Promise<IDBPDatabase> {
   return dbPromise;
 }
 
+/**
+ * A stored photo: its bytes and MIME type, not the Blob itself. Safari refuses
+ * any Blob in IndexedDB in a private window ("Error preparing Blob/File data
+ * to be stored in object store" — WebKit bugs 188438 and 268037), which failed
+ * every save there. Records written before this hold a Blob instead, and are
+ * still read.
+ */
+interface AssetRecord {
+  id: string;
+  bytes?: ArrayBuffer;
+  type?: string;
+  blob?: Blob;
+}
+
 export async function putAsset(id: string, blob: Blob): Promise<void> {
-  await (await db()).put('assets', { id, blob });
+  // Read before the write's transaction opens: it would commit while waiting.
+  const record: AssetRecord = { id, type: blob.type, bytes: await blob.arrayBuffer() };
+  await (await db()).put('assets', record);
 }
 
 export async function hasAsset(id: string): Promise<boolean> {
@@ -52,7 +68,8 @@ export async function deleteAsset(id: string): Promise<void> {
 }
 
 export async function getAssetBlob(id: string): Promise<Blob | undefined> {
-  const rec = (await (await db()).get('assets', id)) as { blob: Blob } | undefined;
+  const rec = (await (await db()).get('assets', id)) as AssetRecord | undefined;
+  if (rec?.bytes) return new Blob([rec.bytes], { type: rec.type ?? '' });
   return rec?.blob;
 }
 

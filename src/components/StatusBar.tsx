@@ -23,7 +23,7 @@ export default function StatusBar() {
   const sel = items.find((i) => i.id === selectedId);
 
   let primary: string;
-  let secondary: string | null = null;
+  let secondary: string | null;
 
   if (!sel) {
     primary = `Canvas ${canvas.width} × ${canvas.height} px`;

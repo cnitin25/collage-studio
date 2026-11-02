@@ -14,13 +14,19 @@ specific to working here with Claude Code, or worth calling out twice.
 - Use the `Edit`/`Write` tools for file changes, not `apply_patch` — the
   `apply_patch` instruction in `AGENTS.md` is a holdover from another agent
   and doesn't apply here.
-- There is no lint/format script configured; `tsc -b` (via `npm run build`)
-  is the only automated correctness check outside the Playwright suite.
+- `npm run lint` (type-aware ESLint, correctness rules only — there is no
+  formatter) and `npm run typecheck` (the app, `vite.config.ts` and the e2e
+  specs) are the static checks; CI (`.github/workflows/ci.yml`) runs both,
+  the e2e suite on Chromium and WebKit, and the production smoke test, on
+  every push and pull request. Work goes through one pull request per phase,
+  merged when CI is green; merging to `master` deploys production.
 - `e2e/` is a separate npm project (own `package.json`, own
-  `node_modules`, own `tsconfig`) — it is not part of the root TypeScript
-  build (`tsc -b`) and won't be type-checked or built by root-level commands.
-  Run its install and tests from inside `e2e/`, or via the root's
-  `npm run test:e2e` convenience script.
+  `node_modules`, own `tsconfig`) — not part of the root build (`tsc -b`),
+  but `npm run typecheck` and `npm run lint` cover it. Run its install and
+  tests from inside `e2e/`, or via the root's `npm run test:e2e`
+  convenience script; it needs `npx playwright install chromium webkit`
+  once. Specs reach the store as `window.__editorStore`, typed from the
+  app's source by `e2e/tests/globals.d.ts` — never `(window as any)`.
   Update `README.md` file after every update of the project. `README.md` should have the features added in the project, resources and project structure
 
 ## Things easy to miss by only reading the code
@@ -51,8 +57,18 @@ specific to working here with Claude Code, or worth calling out twice.
 - The dev server sends no Content-Security-Policy; production does
   (`vercel.json`), and `npm run preview` serves the same headers. Anything
   that loads a new kind of resource (a font, a worker, an image or fetch
-  source) can work in `npm run dev` and break in production — check
-  `npm run build && npm run preview` for CSP violations in the console.
+  source) can work in `npm run dev` and break in production — run
+  `npm run test:prod` (it fails on any CSP violation) and extend
+  `e2e/prod/production.spec.ts` to cover the new resource. After a merge,
+  `PROD_URL=https://offline-collage.vercel.app npm run test:prod` checks the
+  live site.
+- Playwright's WebKit build on Windows can crash under a full parallel run
+  of both engines (worker exit code 3221226505). Rerun the failing specs
+  alone (`--project=webkit`) before treating that as a bug; CI runs each
+  engine as its own job.
+- Photos are stored in IndexedDB as bytes plus MIME type, never as Blobs —
+  Safari's private windows (and Playwright's WebKit) refuse Blobs there.
+  See AGENTS.md's Storage section.
 - Auto-save is on by default and the last project reopens on load. An e2e
   spec that needs "nothing saved" must switch auto-save off first
   (`s.setAutoSaveEnabled(false)`), and one that reloads gets the last saved

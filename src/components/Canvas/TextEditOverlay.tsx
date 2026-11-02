@@ -53,6 +53,10 @@ function InPlaceEditor({ item, hostRef, getStage }: Props & { item: TextItem }) 
     ta.style.height = `${ta.scrollHeight}px`;
   });
 
+  // Measured during render, on purpose: this re-renders on every pan and zoom
+  // (the subscription above), and the field has to sit exactly over the text
+  // as drawn in that same frame. Not compatible with the React Compiler.
+  /* eslint-disable react-hooks/refs */
   const stage = getStage();
   const host = hostRef.current;
   if (!stage || !host) return null;
@@ -62,6 +66,7 @@ function InPlaceEditor({ item, hostRef, getStage }: Props & { item: TextItem }) 
   const scale = stage.scaleX();
   const containerRect = stage.container().getBoundingClientRect();
   const hostRect = host.getBoundingClientRect();
+  /* eslint-enable react-hooks/refs */
   const abs = node.getAbsolutePosition();
   const left = containerRect.left - hostRect.left + abs.x;
   const top = containerRect.top - hostRect.top + abs.y;

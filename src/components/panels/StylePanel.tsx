@@ -25,8 +25,12 @@ export default function StylePanel() {
   if (!sel || sel.type !== 'image') return null;
 
   const autoBorderColor = async () => {
-    const colors = await extractPalette(sel.src, 4);
-    if (colors[0]) updateItem(sel.id, { borderColor: colors[0] });
+    try {
+      const colors = await extractPalette(sel.src, 4);
+      if (colors[0]) updateItem(sel.id, { borderColor: colors[0] });
+    } catch {
+      // Only fails if the photo's data is gone; the border keeps its colour.
+    }
   };
 
   return (
@@ -118,7 +122,7 @@ export default function StylePanel() {
 
       <div className="panel-head" style={{ marginTop: 16 }}>
         <p className="subhead" style={{ margin: 0 }}>Border color</p>
-        <button className="link-btn" onClick={autoBorderColor} title="Set the border color from this photo's dominant color">
+        <button className="link-btn" onClick={() => void autoBorderColor()} title="Set the border color from this photo's dominant color">
           Auto from photo
         </button>
       </div>
