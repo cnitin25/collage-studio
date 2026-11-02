@@ -17,8 +17,8 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2022,
       parserOptions: {
-        // src/ and e2e/ each have a tsconfig.json; the Vite config has its own.
-        projectService: { allowDefaultProject: ['vite.config.ts'], defaultProject: 'tsconfig.node.json' },
+        // src/ and e2e/ each have a tsconfig.json; the Vite and Vitest configs share one.
+        projectService: { allowDefaultProject: ['vite.config.ts', 'vitest.config.ts'], defaultProject: 'tsconfig.node.json' },
         tsconfigRootDir: import.meta.dirname,
       },
     },

@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   check:
-    name: Lint and type-check
+    name: Lint, type-check and unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -35,6 +35,7 @@ jobs:
       - run: npm ci --prefix e2e
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm test
 
   e2e:
     name: End-to-end (${{ matrix.browser }})

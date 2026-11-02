@@ -201,8 +201,10 @@ npm run preview   # serve the build locally (offline/PWA install only works here
 ```
 
 ```bash
+npm test            # unit tests (Vitest): layouts, crops, snapping, colour,
+                    # presets, project-file import, undo history
 npm run lint        # ESLint, type-aware (src/ and the e2e specs)
-npm run typecheck   # the app, vite.config.ts and the e2e specs
+npm run typecheck   # the app, the Vite/Vitest configs and the e2e specs
 ```
 
 ```bash
@@ -222,9 +224,9 @@ quicker run.
 could block. Set `PROD_URL` to run it against a deployment instead:
 `PROD_URL=https://offline-collage.vercel.app npm run test:prod`.
 
-Every push and pull request runs lint, type-check, the e2e suite on Chromium
-and WebKit, and the production smoke test on GitHub Actions
-(`.github/workflows/ci.yml`).
+Every push and pull request runs lint, type-check, the unit tests, the e2e
+suite on Chromium and WebKit, and the production smoke test on GitHub
+Actions (`.github/workflows/ci.yml`).
 
 To use it from another device on the same network (e.g. a phone), run
 `npm run dev:lan` (development) or `npm run build && npm run preview:lan`
@@ -240,13 +242,15 @@ To use it from another device on the same network (e.g. a phone), run
 - **IndexedDB** (via a small wrapper in `src/storage/`) — project + image
   persistence
 - **react-dropzone**, **heic2any** — file ingestion, including HEIC decode
-- **Playwright** (Chromium and WebKit), **ESLint** with typescript-eslint and
-  the React Hooks rules, **GitHub Actions** — checks on every change
+- **Vitest** (unit), **Playwright** (end-to-end, Chromium and WebKit),
+  **ESLint** with typescript-eslint and the React Hooks rules, **GitHub
+  Actions** — checks on every change
 
 ## Project structure
 
 ```
-src/
+src/                      unit tests sit next to the code they cover
+                             (`*.test.ts`, run by `npm test`)
   types/index.ts          data model shared by store, canvas, and storage
   store/
     useEditorStore.ts      canvas/items state, undo/redo, all editing actions
@@ -341,9 +345,10 @@ e2e/                        standalone Playwright project (its own
   through the Chrome DevTools Protocol.
 - The Playwright suite (`e2e/`) covers the mobile responsive layout,
   project storage and recovery, rendering/export output, input handling,
-  project files, cropping and the Insert panel; the rest of the editor is
-  verified manually plus TypeScript and ESLint (`npm run typecheck`,
-  `npm run lint`).
+  project files, cropping and the Insert panel; the unit tests cover the
+  layout, geometry, colour, preset, import and undo logic directly. The rest
+  of the editor is verified manually plus TypeScript and ESLint
+  (`npm run typecheck`, `npm run lint`).
 - Konva is split into its own vendor chunk (`vite.config.ts`) so app-code
   updates don't force a re-download of it, but it still loads on first
   visit since the canvas is needed immediately — there's no further win

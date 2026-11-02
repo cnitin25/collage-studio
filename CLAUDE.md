@@ -15,10 +15,11 @@ specific to working here with Claude Code, or worth calling out twice.
   `apply_patch` instruction in `AGENTS.md` is a holdover from another agent
   and doesn't apply here.
 - `npm run lint` (type-aware ESLint, correctness rules only — there is no
-  formatter) and `npm run typecheck` (the app, `vite.config.ts` and the e2e
-  specs) are the static checks; CI (`.github/workflows/ci.yml`) runs both,
-  the e2e suite on Chromium and WebKit, and the production smoke test, on
-  every push and pull request. Work goes through one pull request per phase,
+  formatter) and `npm run typecheck` (the app, the Vite/Vitest configs and
+  the e2e specs) are the static checks, and `npm test` runs the Vitest unit
+  tests (`src/**/*.test.ts`, plain Node). CI (`.github/workflows/ci.yml`)
+  runs all three, the e2e suite on Chromium and WebKit, and the production
+  smoke test, on every push and pull request. Work goes through one pull request per phase,
   merged when CI is green; merging to `master` deploys production.
 - `e2e/` is a separate npm project (own `package.json`, own
   `node_modules`, own `tsconfig`) — not part of the root build (`tsc -b`),
