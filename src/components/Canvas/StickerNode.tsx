@@ -1,8 +1,10 @@
-import { memo, useRef } from 'react';
-import { Text as KonvaText } from 'react-konva';
+import { memo } from 'react';
+import { Image as KonvaImage, Text as KonvaText } from 'react-konva';
+import useImage from 'use-image';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type { StickerItem } from '../../types';
+import { stickerImage } from '../../style/stickers';
 
 // Memoized, with callbacks that take the item's id (see TextNode).
 interface Props {
@@ -25,35 +27,37 @@ function StickerNode({
   onNodeDragMove,
   onNodeDragEnd,
 }: Props) {
-  const ref = useRef<Konva.Text>(null);
+  // A palette emoji is drawn from its bundled image (style/stickers), a
+  // fontSize square; any other emoji, from an older project or a project
+  // file, as text in the device's emoji font.
+  const src = stickerImage(item.emoji);
+  const [image] = useImage(src ?? '');
 
-  return (
-    <KonvaText
-      id={item.id}
-      name="item"
-      ref={ref}
-      text={item.emoji}
-      x={item.x}
-      y={item.y}
-      fontSize={item.fontSize}
-      rotation={item.rotation}
-      opacity={(item.opacity ?? 100) / 100}
-      draggable={!locked}
-      onClick={(e) => onSelect(item.id, e)}
-      onTap={(e) => onSelect(item.id, e)}
-      onDragMove={(e) => onNodeDragMove(item.id, e.target)}
-      onDragEnd={(e) => onNodeDragEnd(item.id, e.target)}
-      onTransformEnd={() => {
-        const node = ref.current;
-        if (!node || inSelection) return;
-        const sx = node.scaleX();
-        node.scaleX(1);
-        node.scaleY(1);
-        const fs = Math.max(8, item.fontSize * sx);
-        onChange(item.id, { x: node.x(), y: node.y(), rotation: node.rotation(), fontSize: fs, width: fs, height: fs });
-      }}
-    />
-  );
+  const shared = {
+    id: item.id,
+    name: 'item',
+    x: item.x,
+    y: item.y,
+    rotation: item.rotation,
+    opacity: (item.opacity ?? 100) / 100,
+    draggable: !locked,
+    onClick: (e: KonvaEventObject<MouseEvent>) => onSelect(item.id, e),
+    onTap: (e: KonvaEventObject<TouchEvent>) => onSelect(item.id, e),
+    onDragMove: (e: KonvaEventObject<DragEvent>) => onNodeDragMove(item.id, e.target),
+    onDragEnd: (e: KonvaEventObject<DragEvent>) => onNodeDragEnd(item.id, e.target),
+    onTransformEnd: (e: KonvaEventObject<Event>) => {
+      const node = e.target;
+      if (inSelection) return;
+      const sx = node.scaleX();
+      node.scaleX(1);
+      node.scaleY(1);
+      const fs = Math.max(8, item.fontSize * sx);
+      onChange(item.id, { x: node.x(), y: node.y(), rotation: node.rotation(), fontSize: fs, width: fs, height: fs });
+    },
+  };
+
+  if (src) return <KonvaImage {...shared} image={image} width={item.fontSize} height={item.fontSize} />;
+  return <KonvaText {...shared} text={item.emoji} fontSize={item.fontSize} />;
 }
 
 export default memo(StickerNode);

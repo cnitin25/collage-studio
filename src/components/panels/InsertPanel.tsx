@@ -4,12 +4,7 @@ import CollapsiblePanel from './CollapsiblePanel';
 import type { TextAlign } from '../../types';
 import Slider from '../ui/Slider';
 import ColorInput from '../ui/ColorInput';
-
-const STICKERS = [
-  '⭐', '❤️', '✨', '🎉', '🌟', '🔥', '😍', '😎',
-  '🥳', '🌈', '☀️', '🌸', '🍩', '🎈', '👑', '💯',
-  '📌', '✅', '➡️', '💬', '🦄', '🐱', '🌿', '🎂',
-];
+import { STICKERS, stickerImage } from '../../style/stickers';
 
 // `aliases`: the value a font had before, which saved projects still carry.
 const FONTS: { label: string; value: string; aliases?: string[] }[] = [
@@ -83,10 +78,20 @@ export default function InsertPanel() {
       <div className="emoji-grid">
         {STICKERS.map((e) => (
           <button key={e} className="emoji-btn" onClick={() => addSticker(e)} title={`Add ${e} sticker`} aria-label={`Add ${e}`}>
-            {e}
+            <img src={stickerImage(e)} alt="" draggable={false} />
           </button>
         ))}
       </div>
+      <p className="sticker-credit">
+        Emoji graphics:{' '}
+        <a href="https://github.com/jdecked/twemoji" target="_blank" rel="noopener noreferrer">
+          Twemoji
+        </a>{' '}
+        by Twitter and contributors,{' '}
+        <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">
+          CC BY 4.0
+        </a>
+      </p>
 
       {selText && (
         <>

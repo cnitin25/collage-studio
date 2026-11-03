@@ -58,7 +58,10 @@ never leave your device.
     of the canvas, or zoomed in past one, it moves inside the photo instead
     of sitting off the edge of the stage.
 - **Text & stickers** — editable text boxes with font/size/weight/color
-  controls, and an emoji sticker palette. Every text font ships with the app
+  controls, and an emoji sticker palette. The stickers are drawn from
+  bundled Twemoji images, so they look the same on every device and in every
+  export (an emoji the palette doesn't have, from an older project or a
+  project file, is drawn with the device's emoji font). Every text font ships with the app
   (Inter, Gelasio for Serif, Courier Prime for Mono, Anton for Display, and
   four calligraphy fonts), so a collage's text looks the same on every
   device; Gelasio has Georgia's metrics and Courier Prime Courier New's
@@ -344,7 +347,9 @@ src/                      unit tests sit next to the code they cover
     useEditorStore.ts      canvas/items state, undo/redo, all editing actions
     useThemeStore.ts        dark/light theme, persisted to localStorage
   layout/                  Grid / Justified / Mosaic / Masonry / Spotlight layouts
-  style/                   frame presets, enhance presets
+  style/                   frame presets, enhance presets, the sticker palette
+                             (stickers.ts: each emoji's bundled image)
+  assets/stickers/         the palette's Twemoji SVGs (CC BY 4.0, LICENSE.md)
   storage/                 IndexedDB projects + assets (cross-tab save lock),
                              portable file import/export, persistent-storage
                              request; session.ts: reopen the last project,
@@ -379,7 +384,8 @@ src/                      unit tests sit next to the code they cover
 e2e/                        standalone Playwright project (its own
                              package.json and tsconfig); `npm run test:e2e`
                              at the repo root drives it. The storage, file,
-                             import/export and phone specs also run on WebKit
+                             import/export, phone and sticker specs also run
+                             on WebKit
   prod/production.spec.ts    production-build smoke test under the CSP
                              (`npm run test:prod`)
   fixtures/                  a JPEG and a HEIC photo for the smoke test
@@ -438,6 +444,8 @@ e2e/                        standalone Playwright project (its own
                              floating bar; Select more on a phone
     text-style.spec.ts       outline, shadow (under the outline), highlight box,
                              letter/line spacing, text and sticker opacity
+    stickers.spec.ts         palette stickers drawn from their bundled images
+                             (in exports too), other emoji as text, the credit
     helpers.ts               store access, generated test images, image metrics,
                              export pixel analysis
 .github/workflows/ci.yml     lint, type-check, e2e (Chromium, WebKit) and the
@@ -470,8 +478,10 @@ e2e/                        standalone Playwright project (its own
 - heic2any converts in a worker that evaluates code from strings, so the
   Content-Security-Policy has to allow `'unsafe-eval'`. Scripts can still
   only come from the site itself; a WASM-based decoder would remove the need.
-- Stickers are emoji, drawn with each device's own emoji font, so they look
-  different on Apple, Android and Windows.
+- Only the palette's 24 emoji are bundled images. Any other emoji in a
+  sticker (from an older project or a project file) is still drawn with each
+  device's own emoji font, so it looks different on Apple, Android and
+  Windows.
 - Text set in Serif, Mono or Display before those fonts shipped with the app
   keeps the system font it was made with (Georgia, Courier New or a system
   monospace font, Impact) until Serif, Mono or Display is chosen again.
@@ -503,3 +513,8 @@ Bundled third-party code and fonts keep their own licences:
   (LGPL-3.0) for decoding HEIC photos.
 - Inter, Anton, Gelasio, Courier Prime, Pacifico, Dancing Script, Caveat and
   Great Vibes (via Fontsource) — SIL Open Font License 1.1.
+- The sticker images are [Twemoji](https://github.com/jdecked/twemoji)
+  graphics, copyright Twitter, Inc and other contributors, licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the app credits
+  them under the sticker palette. Details and the changes made are in
+  `src/assets/stickers/LICENSE.md`.

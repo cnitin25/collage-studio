@@ -4,10 +4,11 @@ const CI = !!process.env.CI;
 
 /**
  * The specs whose subject behaves differently in Safari's engine: storage,
- * project files, import and export (sharing), and the phone layout. Run on
- * WebKit as well as Chromium; not a substitute for a real iPhone.
+ * project files, import and export (sharing), the phone layout, and
+ * stickers (SVG images drawn on a canvas). Run on WebKit as well as
+ * Chromium; not a substitute for a real iPhone.
  */
-const WEBKIT_SPECS = /(storage|data-safety|project-files|import|export|mobile)\.spec\.ts$/;
+const WEBKIT_SPECS = /(storage|data-safety|project-files|import|export|mobile|stickers)\.spec\.ts$/;
 
 export default defineConfig({
   testDir: './tests',

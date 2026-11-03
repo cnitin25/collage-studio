@@ -69,6 +69,18 @@ test('the production build works under its security policy', async ({ page }) =>
     await expect(page.locator('.import-warning')).toHaveCount(0);
   });
 
+  await test.step('add a sticker, drawn from its bundled image', async () => {
+    const insert = page.locator('[data-panel-title="Insert"] .panel-toggle');
+    if ((await insert.getAttribute('aria-expanded')) !== 'true') await insert.click();
+    await page.getByRole('button', { name: 'Add ⭐', exact: true }).click();
+    // The build inlines the images as data: URLs, which img-src allows.
+    await page.waitForFunction(() =>
+      window.Konva.stages[0]
+        .find<import('konva').default.Image>('Image')
+        .some((n) => (n.image() as HTMLImageElement | undefined)?.src.startsWith('data:image/svg+xml')),
+    );
+  });
+
   await test.step('export a PNG', async () => {
     const [download] = await Promise.all([page.waitForEvent('download'), toolbar('Export').click()]);
     expect(readFileSync(await download.path()).length).toBeGreaterThan(1000);

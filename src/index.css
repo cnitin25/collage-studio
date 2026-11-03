@@ -833,6 +833,9 @@ button {
   aspect-ratio: 1;
   display: grid;
   place-items: center;
+  /* No padding: the image is a share of the whole button, about the 18 px
+     the emoji glyphs were. */
+  padding: 0;
   font-size: 18px;
   border-radius: 6px;
   border: 1px solid transparent;
@@ -841,6 +844,15 @@ button {
 }
 .emoji-btn:hover { border-color: var(--accent); }
 .emoji-btn:active { transform: scale(0.92); }
+.emoji-btn img { width: 62%; height: 62%; display: block; pointer-events: none; }
+/* The sticker images' licence (CC BY 4.0) asks for this credit. */
+.sticker-credit {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted-dim);
+}
+.sticker-credit a { color: inherit; text-decoration: underline; }
 
 .text-input {
   width: 100%;
