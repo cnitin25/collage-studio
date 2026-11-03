@@ -17,6 +17,10 @@ async function addHello(page: Page, patch = '') {
     page,
     `s.updateItem('${id}', { text: 'HELLO', fontSize: 160, fill: '#000000', x: 140, y: 400, width: 800, align: 'center', ${patch} }); s.select(null)`,
   );
+  // Until its font has loaded, the text is measured in a fallback and measured
+  // again once it's in (TextNode): measure after that, not before.
+  await page.waitForFunction(() => document.fonts.check('160px Inter'));
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   return id;
 }
 
