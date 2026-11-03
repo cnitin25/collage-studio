@@ -41,8 +41,9 @@ specific to working here with Claude Code, or worth calling out twice.
   `refitCrop` over `coverCrop`, reference-based unsaved-changes tracking,
   blur radius in canvas pixels (Konva 10 scales it), the single blob-URL release subscription,
   `ColorInput` for colour pickers, `itemSize` for drawn sizes, `UI_OVERLAY`
-  for editor-only visuals, stage-relative zoom maths). Read them before
-  changing those areas.
+  for editor-only visuals, stage-relative zoom maths, memoized item nodes
+  that only ever get stable callbacks). Read them before changing those
+  areas.
 
 - This app has **two responsive layouts** sharing the same components:
   desktop (fixed inspector, full toolbar) and the compact/phone layout

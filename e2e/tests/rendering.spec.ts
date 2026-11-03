@@ -9,6 +9,24 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => !!window.__editorStore);
 });
 
+test('a photo whose image fails to load is marked on the canvas, and the mark stays out of exports', async ({ page }) => {
+  const id = await addImage(page, 'solid', 1200, 900, '#00ff00');
+  await act(page, `s.applyLayout({ type: 'grid' }); s.setBackground({ backgroundType: 'color', backgroundColor: '#ff00ff' })`);
+  await act(page, `s.updateItem('${id}', { src: 'blob:http://localhost:5173/gone' })`);
+  await expect
+    .poll(() => page.evaluate(() => window.Konva.stages[0].find('.missing-photo').length))
+    .toBe(1);
+  const b = await state<{ x: number; y: number; width: number; height: number }>(page, 's.items[0]');
+  const centre = await analyzeExport(
+    page,
+    await exportImage(page, 'png', 1),
+    (px, _w, _h, b) => px(b.x + b.width / 2, b.y + b.height / 2).slice(0, 3),
+    b,
+  );
+  // The background shows where the photo was: no photo, and no placeholder either.
+  expect(centre).toEqual([255, 0, 255]);
+});
+
 test('the collage frame border is its full width on every side and round the corners', async ({ page }) => {
   await addImage(page, 'solid', 400, 400);
   for (const radius of [0, 200]) {

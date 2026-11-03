@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
 import { act, addImage, idbKeys, state } from './helpers';
 
@@ -272,6 +273,53 @@ test('photos stored as Blobs by earlier versions still open', async ({ page, bro
   await ready(page);
   await expect.poll(() => state<number>(page, 's.items.length')).toBe(1);
   expect(await photoAt(page, await state<string>(page, 's.items[0].src'))).toEqual(before);
+});
+
+/** How many photos the canvas marks as missing. */
+const missingMarks = (page: Page) => page.evaluate(() => window.Konva.stages[0].find('.missing-photo').length);
+
+test('a photo whose stored image is gone reopens marked on the canvas, and Replace restores it', async ({ page }) => {
+  await addImage(page);
+  await addImage(page);
+  await save(page);
+  const [, secondAsset] = (await storedProject(page))!.assetIds;
+  // The second photo's image goes missing from storage, as after a partly
+  // cleared site or a write the browser lost.
+  await page.evaluate(
+    (id) =>
+      new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open('collage-studio');
+        req.onerror = () => reject(req.error ?? new Error('IndexedDB open failed'));
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction('assets', 'readwrite');
+          tx.objectStore('assets').delete(id);
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error ?? new Error('IndexedDB write failed'));
+        };
+      }),
+    secondAsset,
+  );
+
+  await page.reload();
+  await ready(page);
+  await expect.poll(() => state<number>(page, 's.items.length')).toBe(2);
+  await expect.poll(() => missingMarks(page)).toBe(1);
+  const notice = page.locator('.import-warning');
+  await expect(notice).toContainText('Photo 2');
+  await expect(notice).toContainText('Replace');
+
+  await act(page, 's.select(s.items[1].id)');
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.locator('.toolbar [aria-label="Replace photo"]').click(),
+  ]);
+  await chooser.setFiles(fileURLToPath(new URL('../fixtures/photo.jpg', import.meta.url)));
+  await expect.poll(() => missingMarks(page)).toBe(0);
+  expect(await state<string>(page, 's.items[1].src')).toMatch(/^blob:/);
 });
 
 test.describe('phone', () => {

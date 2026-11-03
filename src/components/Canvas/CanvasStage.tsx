@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -16,11 +17,13 @@ import StickerNode from './StickerNode';
 import Background from './Background';
 import SelectionActions from './SelectionActions';
 import { drawShapePath } from '../../utils/shapes';
-import type { CollageItem } from '../../types';
+import type { CollageItem, ImageItem } from '../../types';
 import { computeSnap, collectSnapTargets, nearestSnapTarget, type Box, type Guide } from '../../utils/snap';
 import { itemSize } from '../../utils/itemBox';
+import { scaledBy } from '../../utils/scaleItem';
 import { UI_OVERLAY } from './overlay';
 import { COARSE_QUERY, useMediaQuery } from '../../hooks/useMediaQuery';
+import { useStableCallback } from '../../hooks/useStableCallback';
 
 export interface CanvasHandle {
   getStage: () => Konva.Stage | null;
@@ -100,12 +103,9 @@ function itemBox(it: CollageItem): Box {
   return { x: it.x, y: it.y, ...itemSize(it) };
 }
 
-/** An item's size, scaled: a text box by its font as well as its width, so it doesn't rewrap. */
-function scaledBy(it: CollageItem, s: number): Partial<CollageItem> {
-  if (it.type === 'image') return { width: it.width * s, height: it.height * s };
-  if (it.type === 'text') return { width: it.width * s, fontSize: it.fontSize * s };
-  const size = it.fontSize * s;
-  return { fontSize: size, width: size, height: size };
+/** Whether two sets of snap guides draw the same lines. */
+function sameGuides(a: Guide[], b: Guide[]): boolean {
+  return a.length === b.length && a.every((g, i) => g.axis === b[i].axis && g.pos === b[i].pos);
 }
 
 const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
@@ -142,7 +142,14 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
 
   const [display, setDisplay] = useState({ scale: 1 });
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-  const [guides, setGuides] = useState<Guide[]>([]);
+  const [guides, setGuideState] = useState<Guide[]>([]);
+  // A drag or resize reports guides on every pointer move, but they change
+  // far less often: keeping the same array while they're unchanged spares the
+  // stage a re-render per move.
+  const setGuides = useCallback(
+    (next: Guide[]) => setGuideState((prev) => (sameGuides(prev, next) ? prev : next)),
+    [],
+  );
   const isPanning = useRef(false);
   const spaceDown = useRef(false);
 
@@ -617,6 +624,17 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     setDropTargetId(null);
   };
 
+  // The item nodes are memoized: they get the same functions on every render
+  // (the store's actions already are), so only an item that changed re-renders.
+  const onItemSelect = useStableCallback((id: string, e?: KonvaEventObject<Event>) => selectFromCanvas(id, e?.evt));
+  const onItemDragMove = useStableCallback(handleNodeDragMove);
+  const onItemDragEnd = useStableCallback(handleNodeDragEnd);
+  const onCropPanStart = useCallback(() => beginChange('Crop'), [beginChange]);
+  const onCropPan = useCallback(
+    (id: string, crop: NonNullable<ImageItem['crop']>) => updateItemLive(id, { crop }),
+    [updateItemLive],
+  );
+
   const selected = items.find((i) => i.id === selectedId);
   const isTextSelected = selected?.type === 'text';
   const lockRatio = selected
@@ -669,12 +687,12 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                     // node stays visible, updating live (TextEditOverlay).
                     isEditing={editingId === item.id && !coarsePointer}
                     locked={layoutLocked}
-                    onSelect={(e) => selectFromCanvas(item.id, e?.evt)}
+                    onSelect={onItemSelect}
                     inSelection={multi && selectedIds.includes(item.id)}
-                    onChange={(patch) => updateItem(item.id, patch)}
-                    onStartEdit={() => startEditingText(item.id)}
-                    onNodeDragMove={handleNodeDragMove}
-                    onNodeDragEnd={handleNodeDragEnd}
+                    onChange={updateItem}
+                    onStartEdit={startEditingText}
+                    onNodeDragMove={onItemDragMove}
+                    onNodeDragEnd={onItemDragEnd}
                   />
                 );
               }
@@ -684,11 +702,11 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                     key={item.id}
                     item={item}
                     locked={layoutLocked}
-                    onSelect={(e) => selectFromCanvas(item.id, e?.evt)}
+                    onSelect={onItemSelect}
                     inSelection={multi && selectedIds.includes(item.id)}
-                    onChange={(patch) => updateItem(item.id, patch)}
-                    onNodeDragMove={handleNodeDragMove}
-                    onNodeDragEnd={handleNodeDragEnd}
+                    onChange={updateItem}
+                    onNodeDragMove={onItemDragMove}
+                    onNodeDragEnd={onItemDragEnd}
                   />
                 );
               }
@@ -704,13 +722,13 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                   isCropping={croppingId === item.id}
                   isDropTarget={dropTargetId === item.id}
                   locked={layoutLocked}
-                  onSelect={(e) => selectFromCanvas(item.id, e?.evt)}
-                    inSelection={multi && selectedIds.includes(item.id)}
-                  onChange={(patch) => updateItem(item.id, patch)}
-                  onNodeDragMove={handleNodeDragMove}
-                  onNodeDragEnd={handleNodeDragEnd}
-                  onCropPanStart={() => beginChange('Crop')}
-                  onCropPan={(crop) => updateItemLive(item.id, { crop })}
+                  onSelect={onItemSelect}
+                  inSelection={multi && selectedIds.includes(item.id)}
+                  onChange={updateItem}
+                  onNodeDragMove={onItemDragMove}
+                  onNodeDragEnd={onItemDragEnd}
+                  onCropPanStart={onCropPanStart}
+                  onCropPan={onCropPan}
                   onCropPanEnd={commitChange}
                 />
               );

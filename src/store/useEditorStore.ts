@@ -16,6 +16,7 @@ import type { LayoutSpec, SpacingOptions } from '../layout/types';
 import { computeLayout } from '../layout/strategies';
 import { coverCrop, refitCrop } from '../utils/cover';
 import { itemSize } from '../utils/itemBox';
+import { scaledBy } from '../utils/scaleItem';
 import { FRAMES, type FrameId } from '../style/frames';
 import {
   ENHANCE_PRESETS,
@@ -27,6 +28,10 @@ import {
 import type { SerializedState } from '../storage/projects';
 import { uid } from '../utils/id';
 import { shuffle } from '../utils/random';
+
+/** 'new-version': one is installed and waiting. 'out-of-date': code this page
+ *  loads on demand is gone from the server, as after a release. */
+export type AppUpdate = 'new-version' | 'out-of-date';
 
 interface Snapshot {
   items: CollageItem[];
@@ -93,6 +98,8 @@ interface EditorState {
   lastSavedAt: number | null;
   /** A slow operation in progress ("Adding photos… 2 of 5"), shown by App. */
   busyMessage: string | null;
+  /** A newer version is waiting, or this page's code is out of date (utils/appUpdate). */
+  appUpdate: AppUpdate | null;
   // view state (not part of undo history)
   viewScale: number;
   viewX: number;
@@ -191,6 +198,7 @@ interface EditorState {
   setAutoSaveEnabled: (v: boolean) => void;
   setImportFailures: (failures: ImageLoadFailure[]) => void;
   setBusyMessage: (message: string | null) => void;
+  setAppUpdate: (update: AppUpdate | null) => void;
   loadSerializedState: (state: SerializedState, id: string, name: string, savedAt?: number) => void;
   resetProject: () => void;
   /** Record a completed save of `ref` (the state as it was when the save began). */
@@ -390,6 +398,23 @@ function pushStep(s: Draft<EditorState>, prev: Snapshot, label: string): void {
   s.futureLabels = [];
 }
 
+/** Photos that opened without their image: nothing was stored for them (openProject). */
+function missingPhotos(items: CollageItem[], project: string): ImageLoadFailure[] {
+  return items
+    .filter((it) => it.type === 'image')
+    .flatMap((photo, i) =>
+      photo.src
+        ? []
+        : [
+            {
+              name: `Photo ${i + 1}`,
+              reason: "Its image isn't in this browser's storage any more. It's marked on the canvas: select it and use Replace.",
+              source: project,
+            },
+          ],
+    );
+}
+
 /** How far a duplicate or a paste lands from the original, in canvas px. */
 const PASTE_STEP = 28;
 
@@ -507,6 +532,7 @@ export const useEditorStore = create<EditorState>()(
     },
     lastSavedAt: null,
     busyMessage: null,
+    appUpdate: null,
     viewScale: 1,
     viewX: 0,
     viewY: 0,
@@ -788,6 +814,23 @@ export const useEditorStore = create<EditorState>()(
       const prev = snapshot(get());
       set((s) => {
         pushStep(s, prev, label);
+        // A layout places the photos again. Everything else keeps its place in
+        // the canvas: its centre moves with it, and it scales by the smaller
+        // ratio, so nothing stretches and nothing that fitted falls outside.
+        const k = Math.min(width / w, height / h);
+        for (const it of s.items) {
+          if (it.type === 'image' && s.lastLayout) continue;
+          const size = itemSize(it);
+          // Items turn about their top-left corner, so find the drawn centre.
+          const r = (it.rotation * Math.PI) / 180;
+          const [cos, sin] = [Math.cos(r), Math.sin(r)];
+          const cx = (it.x + (size.width / 2) * cos - (size.height / 2) * sin) * (width / w);
+          const cy = (it.y + (size.width / 2) * sin + (size.height / 2) * cos) * (height / h);
+          Object.assign(it, scaledBy(it, k));
+          const [hw, hh] = [(size.width * k) / 2, (size.height * k) / 2];
+          it.x = cx - hw * cos + hh * sin;
+          it.y = cy - hw * sin - hh * cos;
+        }
         s.canvas.width = width;
         s.canvas.height = height;
         if (s.lastLayout) layoutToDraft(s, s.lastLayout);
@@ -1241,6 +1284,8 @@ export const useEditorStore = create<EditorState>()(
         s.importFailures = failures;
       }),
 
+    setAppUpdate: (update) => set({ appUpdate: update }),
+
     setBusyMessage: (message) =>
       set((s) => {
         s.busyMessage = message;
@@ -1254,6 +1299,9 @@ export const useEditorStore = create<EditorState>()(
       set((s) => {
         s.canvas = state.canvas;
         s.items = state.items;
+        // What a previous project reported doesn't apply to this one; a photo
+        // this one opened without does (it's marked on the canvas).
+        s.importFailures = missingPhotos(state.items, name);
         s.spacing = state.spacing;
         s.lastLayout = state.lastLayout;
         setSelection(s, []);

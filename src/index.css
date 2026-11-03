@@ -1208,6 +1208,17 @@ button {
   object-fit: cover;
   display: block;
 }
+/* A photo whose image is gone: marked here as on the canvas (ImageNode). */
+.thumb-missing {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: repeating-linear-gradient(45deg, var(--panel-hi) 0 6px, var(--line) 6px 12px);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 18px;
+}
 .thumb-sel-mark {
   position: absolute;
   inset: 0;
@@ -1549,6 +1560,30 @@ button {
 }
 .mode-toggles.is-stacked .mode-toggle span { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .inspector-modes { display: none; }
+
+/* ---------- Update banner (UpdateBanner) ---------- */
+/* At the top, clear of the toasts and the import banner at the foot. */
+.update-banner {
+  position: fixed;
+  top: calc(64px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 16px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px -6px var(--shadow-color-soft);
+  font-size: 13px;
+}
+.update-banner-text { flex: 1 1 16em; }
 
 /* ---------- Import warning banner ---------- */
 .import-warning {

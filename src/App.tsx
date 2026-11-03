@@ -8,6 +8,8 @@ import ProjectsModal from './components/ProjectsModal';
 import ThumbnailStrip from './components/ThumbnailStrip';
 import StatusBar from './components/StatusBar';
 import ImportWarningBanner from './components/ImportWarningBanner';
+import UpdateBanner from './components/UpdateBanner';
+import { reloadForUpdate } from './utils/appUpdate';
 import SelectionBar from './components/SelectionBar';
 import { COMPACT_QUERY, useMediaQuery } from './hooks/useMediaQuery';
 import {
@@ -136,11 +138,12 @@ export default function App() {
   // Auto-save every 30 s when there's unsaved work, and whenever the page is
   // hidden. Phones rarely deliver beforeunload: switching apps can be the last
   // thing the page ever sees before it's evicted, so that's when to save.
-  const autoSaveNow = useRef<() => void>(() => {});
+  // Resolves to whether the work is safe to leave: saved, or nothing to save.
+  const autoSaveNow = useRef<() => Promise<boolean>>(() => Promise.resolve(true));
   useEffect(() => {
-    const autoSave = () => {
+    const autoSave = async () => {
       const st = useEditorStore.getState();
-      if (!st.autoSaveEnabled || !needsSaving(st)) return;
+      if (!st.autoSaveEnabled || !needsSaving(st)) return true;
       const handle = canvasRef.current;
       let thumbnail: string | undefined;
       try {
@@ -153,20 +156,26 @@ export default function App() {
       } catch {
         thumbnail = undefined;
       }
-      // A background save that fails must still say so — silently dropping it
-      // is how a full disk goes unnoticed until the project won't reopen.
-      saveCurrent(thumbnail).catch((err) => showToast(`Auto-save failed: ${describeSaveError(err)}`, true));
+      try {
+        await saveCurrent(thumbnail);
+        return true;
+      } catch (err) {
+        // A background save that fails must still say so — silently dropping
+        // it is how a full disk goes unnoticed until the project won't reopen.
+        showToast(`Auto-save failed: ${describeSaveError(err)}`, true);
+        return false;
+      }
     };
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') autoSave();
+      if (document.visibilityState === 'hidden') void autoSave();
     };
     // pagehide covers browsers that unload without a visibility change first;
     // when one did fire, it has already saved.
     const onPageHide = () => {
-      if (document.visibilityState !== 'hidden') autoSave();
+      if (document.visibilityState !== 'hidden') void autoSave();
     };
     autoSaveNow.current = autoSave;
-    const timer = window.setInterval(autoSave, 30_000);
+    const timer = window.setInterval(() => void autoSave(), 30_000);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
     return () => {
@@ -195,17 +204,24 @@ export default function App() {
     useEditorStore.getState().setAutoSaveEnabled(on);
     if (on) {
       showToast('Auto-save is on');
-      autoSaveNow.current(); // anything unsaved goes now, not in 30 s
+      void autoSaveNow.current(); // anything unsaved goes now, not in 30 s
     } else {
       showToast('Auto-save is off — use Save to keep your changes', false, {
         label: 'Turn on',
         run: () => {
           useEditorStore.getState().setAutoSaveEnabled(true);
-          autoSaveNow.current();
+          void autoSaveNow.current();
         },
       });
     }
   }, [showToast]);
+
+  // Reloading into a new version keeps the work: auto-save stores it first,
+  // and a save that fails keeps the page. With auto-save off, the browser's
+  // "Leave site?" prompt guards unsaved work, as on any other reload.
+  const handleUpdateReload = useCallback(async () => {
+    if (await autoSaveNow.current()) reloadForUpdate();
+  }, []);
 
   // Closing the tab with unsaved work — or mid-save, which unloading would
   // cut short — gets the browser's "Leave site?" prompt.
@@ -530,6 +546,7 @@ export default function App() {
         </div>
       )}
       <ImportWarningBanner />
+      <UpdateBanner onReload={() => void handleUpdateReload()} />
       {/* aria-live, not role="status": that role is the toast's. */}
       {busyMessage && (
         <div className="busy-indicator" aria-live="polite">

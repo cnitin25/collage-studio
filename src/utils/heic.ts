@@ -6,6 +6,8 @@
 // it, and it still works fully offline once loaded (no CDN, no network calls;
 // verified by inspecting the bundle directly).
 
+import { useEditorStore } from '../store/useEditorStore';
+
 const HEIC_MIME_TYPES = ['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'];
 const HEIC_EXTENSIONS = ['.heic', '.heif'];
 
@@ -35,8 +37,11 @@ export async function convertHeicToJpeg(file: File): Promise<Blob> {
   let heic2any: typeof import('heic2any').default;
   try {
     heic2any = (await import('heic2any')).default;
-  } catch {
-    throw new Error('The HEIC/HEIF converter could not be loaded.');
+  } catch (err) {
+    // Its file has most likely gone from the server: a new release replaced
+    // it while this page was open. A reload fetches the new one.
+    useEditorStore.getState().setAppUpdate('out-of-date');
+    throw new Error("The HEIC/HEIF converter couldn't be loaded. Reload the page and try again.", { cause: err });
   }
   let result: Blob | Blob[];
   let timer: number | undefined;

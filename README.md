@@ -77,7 +77,10 @@ never leave your device.
 - **Canvas sizing** — social-media presets (square, portrait, story,
   landscape, wide) and print presets (4×6, 5×7, 8×10, A4 at 300 DPI, portrait
   or landscape), or a custom pixel size. Each preset's icon is drawn at its
-  real proportions.
+  real proportions. Changing the size keeps everything in its place in the
+  collage: a layout re-places its photos, and text, stickers and freely
+  placed photos move with the canvas and scale to fit it, without
+  stretching (text keeps its wrapping and its effects).
 - **Editor modes** — Snap, Lock layout, Swap, Lock ratio and Stay in crop are
   toggle buttons in the status bar (highlighted while on), so they stay
   visible even with the tools panel collapsed; on a phone they sit at the
@@ -111,6 +114,11 @@ never leave your device.
     bytes). Projects in a private window are gone once it closes.
   - If the saved projects can't be read, opened or deleted, the Projects
     dialog says why instead of staying empty.
+  - A photo whose image is gone from the browser's storage (a partly cleared
+    site, say) opens as a marked placeholder — "Photo missing", on the canvas
+    and in the thumbnail strip — and a notice names it, so the gap explains
+    itself. Select it and use Replace to put a photo back; an export shows
+    the gap, never the mark.
   - Stored photos no saved project uses any more (deleted projects, replaced
     photos) are cleaned up automatically, so storage doesn't only ever grow.
   - Clear canvas doesn't ask first; it shows an **Undo** button instead.
@@ -138,6 +146,14 @@ never leave your device.
   fails says why.
 - **Offline install (PWA)** — the built app installs and runs with no
   network connection.
+  - **Updates wait for you.** A new version downloads in the background
+    (an open app checks hourly) and a notice under the toolbar offers
+    **Reload** or **Later**: the app is never swapped out mid-edit, and
+    Reload saves your work first (with auto-save on; off, the browser asks
+    before leaving unsaved work).
+  - A page left open across a release, whose on-demand code (the HEIC
+    converter) is gone from the server, says the app was updated and offers
+    the reload, instead of failing with an obscure error.
 - **Locked down** — the site is served with a Content-Security-Policy (in
   `vercel.json`) that only lets the page load scripts, images and data from
   itself, so the "nothing leaves your device" promise is enforced by the
@@ -205,9 +221,9 @@ never leave your device.
   the selection or takes it out, dragging across empty canvas selects
   everything the box touches, and Ctrl/⌘+A selects all; on a phone, **Select
   more** in the bottom bar makes taps add to the selection. A selection of
-  several moves, resizes and rotates as one (text scales its font, so it
-  doesn't rewrap) and can be deleted, duplicated, nudged, copied and pasted —
-  each as one undo step.
+  several moves, resizes and rotates as one (text scales its font and its
+  effects, so it doesn't rewrap) and can be deleted, duplicated, nudged,
+  copied and pasted — each as one undo step.
   - **Groups**: Ctrl/⌘+G groups the selection and Ctrl/⌘+Shift+G ungroups
     it. One click on a member selects the whole group; groups are saved with
     the project (and in portable files), and copies of a group form a group
@@ -270,7 +286,7 @@ npm run preview   # serve the build locally (offline/PWA install only works here
 ```bash
 npm test            # unit tests (Vitest): layouts, crops, snapping, colour,
                     # photo adjustments, presets, project-file import, undo
-                    # history
+                    # history, canvas resizing
 npm run lint        # ESLint, type-aware (src/ and the e2e specs)
 npm run typecheck   # the app, the Vite/Vitest configs and the e2e specs
 ```
@@ -329,12 +345,15 @@ src/                      unit tests sit next to the code they cover
                              portable file import/export, persistent-storage
                              request; session.ts: reopen the last project,
                              crash-loop guard, crash recovery copy
-  hooks/                   useMediaQuery (+ the layout breakpoints), useReplacePhoto
+  hooks/                   useMediaQuery (+ the layout breakpoints), useReplacePhoto,
+                             useStableCallback (for the memoized canvas nodes)
   utils/                   image loading/downscaling, HEIC conversion, cropping,
                              palette, export/share, platform detection,
                              importPhotos (import + progress), the photo
                              adjustments (adjustments.ts: each filter, and
-                             the order they run in) and warmth
+                             the order they run in), warmth, scaleItem
+                             (scaling an item with its effects) and
+                             appUpdate (service worker + update checks)
   components/
     StatusBar.tsx           selection/canvas info + the editor mode toggles
     ModeToggles.tsx         Snap / Lock layout / Swap / Lock ratio / Stay in crop
@@ -347,6 +366,7 @@ src/                      unit tests sit next to the code they cover
     App.tsx                 dropzone, keyboard shortcuts, export/save wiring
     ErrorBoundary.tsx        catches render crashes, saves a recovery copy of
                              unsaved work, offers a safe reload
+    UpdateBanner.tsx         offers the reload into a new version
     Canvas/                  Konva stage and per-item node renderers;
                              SelectionActions.tsx is the floating bar
     panels/                  right-hand inspector — one collapsible panel per
@@ -387,10 +407,14 @@ e2e/                        standalone Playwright project (its own
     data-safety.spec.ts      auto-save default + toggle, reopening the last
                              project, crash-loop guard, cross-tab saves, kept
                              backgrounds, database repair, saving where Blobs
-                             can't be stored, older Blob records, phone
-                             toolbar fit
+                             can't be stored, older Blob records, a photo
+                             missing from storage, phone toolbar fit
     rendering.spec.ts        frame and photo borders at full width and inside,
-                             opacity vs shadow, masonry gaps, frame presets
+                             opacity vs shadow, masonry gaps, frame presets,
+                             the missing-photo mark kept out of exports
+    app-update.spec.ts       the update notice: Reload (saving first), Later,
+                             and code gone from the server after a release
+    performance.spec.ts      dragging one item re-renders none of the others
     adjustments.spec.ts      the Adjust sliders' groups and undo steps; exposure,
                              highlights/shadows, vibrance, vignette and sharpen
                              measured in exports (the last two at 1x and 3x)

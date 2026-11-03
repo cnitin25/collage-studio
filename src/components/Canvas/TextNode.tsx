@@ -1,24 +1,26 @@
-import { useRef } from 'react';
+import { memo, useRef } from 'react';
 import { Shape, Text as KonvaText } from 'react-konva';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { DEFAULT_LINE_HEIGHT, type TextItem } from '../../types';
 import { drawShapePath } from '../../utils/shapes';
 
+// Memoized, with callbacks that take the item's id: CanvasStage passes the
+// same functions to every item, so only an item that changed re-renders.
 interface Props {
   item: TextItem;
   isEditing: boolean;
   locked: boolean;
-  onSelect: (e?: KonvaEventObject<Event>) => void;
+  onSelect: (id: string, e?: KonvaEventObject<Event>) => void;
   /** One of several selected items: the selection is transformed as a whole (CanvasStage). */
   inSelection: boolean;
-  onChange: (patch: Partial<TextItem>) => void;
-  onStartEdit: () => void;
+  onChange: (id: string, patch: Partial<TextItem>) => void;
+  onStartEdit: (id: string) => void;
   onNodeDragMove: (id: string, node: Konva.Node) => void;
   onNodeDragEnd: (id: string, node: Konva.Node) => void;
 }
 
-export default function TextNode({
+function TextNode({
   item,
   inSelection,
   isEditing,
@@ -96,10 +98,10 @@ export default function TextNode({
         rotation={item.rotation}
         visible={!isEditing}
         draggable={!locked}
-        onClick={onSelect}
-        onTap={onSelect}
-        onDblClick={onStartEdit}
-        onDblTap={onStartEdit}
+        onClick={(e) => onSelect(item.id, e)}
+        onTap={(e) => onSelect(item.id, e)}
+        onDblClick={() => onStartEdit(item.id)}
+        onDblTap={() => onStartEdit(item.id)}
         onDragMove={(e) => onNodeDragMove(item.id, e.target)}
         onDragEnd={(e) => onNodeDragEnd(item.id, e.target)}
         // Rewrap as the box is dragged: left scaled, the glyphs were squashed or
@@ -117,7 +119,7 @@ export default function TextNode({
           node.scaleY(1);
           // Resizing the box only rewraps the text (width); font size is left
           // untouched so box and text size can be changed independently.
-          onChange({
+          onChange(item.id, {
             x: node.x(),
             y: node.y(),
             rotation: node.rotation(),
@@ -128,3 +130,5 @@ export default function TextNode({
     </>
   );
 }
+
+export default memo(TextNode);

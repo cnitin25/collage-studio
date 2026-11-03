@@ -1,21 +1,22 @@
-import { useRef } from 'react';
+import { memo, useRef } from 'react';
 import { Text as KonvaText } from 'react-konva';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type { StickerItem } from '../../types';
 
+// Memoized, with callbacks that take the item's id (see TextNode).
 interface Props {
   item: StickerItem;
   locked: boolean;
-  onSelect: (e?: KonvaEventObject<Event>) => void;
+  onSelect: (id: string, e?: KonvaEventObject<Event>) => void;
   /** One of several selected items: the selection is transformed as a whole (CanvasStage). */
   inSelection: boolean;
-  onChange: (patch: Partial<StickerItem>) => void;
+  onChange: (id: string, patch: Partial<StickerItem>) => void;
   onNodeDragMove: (id: string, node: Konva.Node) => void;
   onNodeDragEnd: (id: string, node: Konva.Node) => void;
 }
 
-export default function StickerNode({
+function StickerNode({
   item,
   inSelection,
   locked,
@@ -38,8 +39,8 @@ export default function StickerNode({
       rotation={item.rotation}
       opacity={(item.opacity ?? 100) / 100}
       draggable={!locked}
-      onClick={onSelect}
-      onTap={onSelect}
+      onClick={(e) => onSelect(item.id, e)}
+      onTap={(e) => onSelect(item.id, e)}
       onDragMove={(e) => onNodeDragMove(item.id, e.target)}
       onDragEnd={(e) => onNodeDragEnd(item.id, e.target)}
       onTransformEnd={() => {
@@ -49,8 +50,10 @@ export default function StickerNode({
         node.scaleX(1);
         node.scaleY(1);
         const fs = Math.max(8, item.fontSize * sx);
-        onChange({ x: node.x(), y: node.y(), rotation: node.rotation(), fontSize: fs, width: fs, height: fs });
+        onChange(item.id, { x: node.x(), y: node.y(), rotation: node.rotation(), fontSize: fs, width: fs, height: fs });
       }}
     />
   );
 }
+
+export default memo(StickerNode);

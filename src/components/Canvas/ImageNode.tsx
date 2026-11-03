@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { Group, Image as KonvaImage, Rect, Shape, Text } from 'react-konva';
 import useImage from 'use-image';
 import Konva from 'konva';
@@ -10,19 +10,20 @@ import { registerImageNode } from '../../utils/imageNodeRegistry';
 import { filterPipeline, hasAdjustments } from '../../utils/adjustments';
 import { UI_OVERLAY } from './overlay';
 
+// Memoized, with callbacks that take the item's id (see TextNode).
 interface Props {
   item: ImageItem;
   isCropping: boolean;
   isDropTarget: boolean;
   locked: boolean;
-  onSelect: (e?: KonvaEventObject<Event>) => void;
+  onSelect: (id: string, e?: KonvaEventObject<Event>) => void;
   /** One of several selected items: the selection is transformed as a whole (CanvasStage). */
   inSelection: boolean;
-  onChange: (patch: Partial<ImageItem>) => void; // committed (history)
+  onChange: (id: string, patch: Partial<ImageItem>) => void; // committed (history)
   onNodeDragMove: (id: string, node: Konva.Node) => void;
   onNodeDragEnd: (id: string, node: Konva.Node) => void;
   onCropPanStart: () => void;
-  onCropPan: (crop: NonNullable<ImageItem['crop']>) => void; // live
+  onCropPan: (id: string, crop: NonNullable<ImageItem['crop']>) => void; // live
   onCropPanEnd: () => void;
 }
 
@@ -85,7 +86,42 @@ function GlyphBorder({
   );
 }
 
-export default function ImageNode({
+/**
+ * Stands in for a photo whose image is gone (nothing stored for it, or it no
+ * longer loads), so the gap explains itself. Editor-only, like the other
+ * overlays: an export shows the gap, not this.
+ */
+function MissingPhoto({ w, h }: { w: number; h: number }) {
+  const fontSize = Math.max(11, Math.min(26, Math.min(w, h) / 9));
+  return (
+    <Group name={`${UI_OVERLAY} missing-photo`} listening={false}>
+      <Rect width={w} height={h} fill="#e4e6eb" />
+      <Rect
+        x={1.5}
+        y={1.5}
+        width={Math.max(0, w - 3)}
+        height={Math.max(0, h - 3)}
+        stroke="#8a909c"
+        strokeWidth={3}
+        dash={[10, 7]}
+      />
+      <Text
+        width={w}
+        height={h}
+        padding={10}
+        align="center"
+        verticalAlign="middle"
+        lineHeight={1.35}
+        fontFamily="Inter, system-ui, sans-serif"
+        fontSize={fontSize}
+        fill="#4a4f5a"
+        text={'Photo missing\nSelect it and use Replace'}
+      />
+    </Group>
+  );
+}
+
+function ImageNode({
   item,
   inSelection,
   isCropping,
@@ -99,7 +135,9 @@ export default function ImageNode({
   onCropPan,
   onCropPanEnd,
 }: Props) {
-  const [image] = useImage(item.src);
+  const [image, status] = useImage(item.src);
+  // Nothing was stored for it (openProject found no image), or it no longer loads.
+  const missing = !item.src || status === 'failed';
   const groupRef = useRef<Konva.Group>(null);
   const imgRef = useRef<Konva.Image>(null);
   const borderRef = useRef<Konva.Shape>(null);
@@ -183,7 +221,7 @@ export default function ImageNode({
     const fy = c.height / item.height;
     const nx = Math.max(0, Math.min(c.x - dx * fx, item.naturalWidth - c.width));
     const ny = Math.max(0, Math.min(c.y - dy * fy, item.naturalHeight - c.height));
-    onCropPan({ x: nx, y: ny, width: c.width, height: c.height });
+    onCropPan(item.id, { x: nx, y: ny, width: c.width, height: c.height });
   };
 
   const handlePanEnd = () => {
@@ -235,7 +273,7 @@ export default function ImageNode({
     // for a never-cropped photo crops it to its new shape instead of letting
     // Konva stretch the whole image into it.
     patch.crop = refitCrop(item.naturalWidth, item.naturalHeight, item.crop, item.width, item.height, width, height);
-    onChange(patch);
+    onChange(item.id, patch);
   };
 
   const shape = item.clipShape ?? 'rect';
@@ -254,8 +292,8 @@ export default function ImageNode({
       y={item.y}
       rotation={item.rotation}
       draggable={!isCropping && !locked}
-      onClick={onSelect}
-      onTap={onSelect}
+      onClick={(e) => onSelect(item.id, e)}
+      onTap={(e) => onSelect(item.id, e)}
       onDragMove={(e) => {
         if (isCropping) return;
         onNodeDragMove(item.id, e.target);
@@ -334,6 +372,7 @@ export default function ImageNode({
           onDragMove={handlePanMove}
           onDragEnd={handlePanEnd}
         />
+        {missing && <MissingPhoto w={item.width} h={item.height} />}
         {borderWidth > 0 && (item.borderStyle ?? 'solid') !== 'glyph' && (
           <Shape
             ref={borderRef}
@@ -409,3 +448,5 @@ export default function ImageNode({
     </Group>
   );
 }
+
+export default memo(ImageNode);

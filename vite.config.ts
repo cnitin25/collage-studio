@@ -14,7 +14,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // A new version installs in the background and waits: UpdateBanner
+      // offers the reload, so the app is never swapped under someone's work.
+      registerType: 'prompt',
       includeAssets: ['icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable.png'],
       manifest: {
         name: 'Collage Studio',

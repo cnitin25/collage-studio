@@ -4,6 +4,7 @@ import Konva from 'konva';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { useEditorStore } from './store/useEditorStore';
+import { watchForUpdates } from './utils/appUpdate';
 import './index.css';
 
 // Dev/test-only: lets Playwright read view state (viewScale/viewX/viewY)
@@ -49,3 +50,5 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </React.StrictMode>,
 );
+
+watchForUpdates();
