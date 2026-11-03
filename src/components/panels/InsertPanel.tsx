@@ -14,8 +14,8 @@ const STICKERS = [
 // `aliases`: the value a font had before, which saved projects still carry.
 const FONTS: { label: string; value: string; aliases?: string[] }[] = [
   { label: 'Sans', value: 'Inter, system-ui, sans-serif' },
-  { label: 'Serif', value: 'Georgia, "Times New Roman", serif' },
-  { label: 'Mono', value: 'ui-monospace, "Courier New", monospace' },
+  { label: 'Serif', value: 'Gelasio, Georgia, "Times New Roman", serif', aliases: ['Georgia, "Times New Roman", serif'] },
+  { label: 'Mono', value: '"Courier Prime", "Courier New", monospace', aliases: ['ui-monospace, "Courier New", monospace'] },
   { label: 'Display', value: 'Anton, Impact, "Arial Black", sans-serif', aliases: ['Impact, "Arial Black", sans-serif'] },
   { label: 'Script', value: '"Dancing Script", cursive' },
   { label: 'Brush', value: 'Pacifico, cursive' },

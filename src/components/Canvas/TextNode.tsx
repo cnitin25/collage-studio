@@ -1,4 +1,4 @@
-import { memo, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Shape, Text as KonvaText } from 'react-konva';
 import type Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
@@ -33,6 +33,37 @@ function TextNode({
 }: Props) {
   const ref = useRef<Konva.Text>(null);
   const opacity = (item.opacity ?? 100) / 100;
+
+  // A bundled font loads the first time something uses it, and the canvas
+  // doesn't wait: text drawn before that was measured, wrapped and drawn in a
+  // fallback font, and stayed that way. Measure and draw it again once it's in.
+  useEffect(() => {
+    const fonts = document.fonts;
+    if (!fonts) return;
+    const font = `${item.fontStyle} 16px ${item.fontFamily}`;
+    let loading: Promise<FontFace[]>;
+    try {
+      if (fonts.check(font)) return;
+      loading = fonts.load(font);
+    } catch {
+      // Not a font the browser can parse (a project file can name anything):
+      // the canvas ignores it too. Thrown here, it would unmount the canvas.
+      return;
+    }
+    let live = true;
+    loading
+      .then(() => {
+        const node = ref.current;
+        if (!live || !node) return;
+        node._setTextData(); // Konva measures text only when one of its attributes changes
+        node.getLayer()?.batchDraw();
+      })
+      // A family that isn't there: the fallback it's drawn in is all there is.
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [item.fontFamily, item.fontStyle]);
   const outline = item.outlineWidth && item.outlineColor ? { color: item.outlineColor, width: item.outlineWidth } : null;
   const { shadow, background } = item;
 

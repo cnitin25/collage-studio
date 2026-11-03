@@ -54,6 +54,11 @@ test('the production build works under its security policy', async ({ page }) =>
   await test.step('service worker and fonts', async () => {
     expect(await page.evaluate(() => navigator.serviceWorker.ready.then((r) => !!r.active))).toBe(true);
     expect(await page.evaluate(() => document.fonts.ready.then(() => document.fonts.size))).toBeGreaterThan(0);
+    // Every bundled family loads from the site itself (font-src 'self').
+    for (const family of ['Inter', 'Anton', 'Gelasio', 'Courier Prime', 'Pacifico', 'Dancing Script', 'Caveat', 'Great Vibes']) {
+      const faces = await page.evaluate((f) => document.fonts.load(`16px "${f}"`).then((loaded) => loaded.length), family);
+      expect(faces, family).toBeGreaterThan(0);
+    }
   });
 
   await test.step('import a JPEG and a HEIC', async () => {

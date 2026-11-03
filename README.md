@@ -59,8 +59,12 @@ never leave your device.
     of sitting off the edge of the stage.
 - **Text & stickers** — editable text boxes with font/size/weight/color
   controls, and an emoji sticker palette. Every text font ships with the app
-  (Inter, Anton for Display, and four calligraphy fonts), so a collage's text
-  looks the same on every device. Resizing a text box rewraps it as you drag.
+  (Inter, Gelasio for Serif, Courier Prime for Mono, Anton for Display, and
+  four calligraphy fonts), so a collage's text looks the same on every
+  device; Gelasio has Georgia's metrics and Courier Prime Courier New's
+  widths, so text wraps as it did in those. Text drawn before its font has
+  loaded is measured and drawn again once it has. Resizing a text box
+  rewraps it as you drag.
   - **Text Effects**: letter and line spacing, an outline (drawn behind the
     letters, so they keep their weight), a shadow (blur, distance,
     direction, opacity, colour) and a highlight — a rounded, padded box
@@ -467,9 +471,10 @@ e2e/                        standalone Playwright project (its own
   Content-Security-Policy has to allow `'unsafe-eval'`. Scripts can still
   only come from the site itself; a WASM-based decoder would remove the need.
 - Stickers are emoji, drawn with each device's own emoji font, so they look
-  different on Apple, Android and Windows. The Serif and Mono text fonts are
-  system fonts too (Georgia / Courier New, with fallbacks); every other text
-  font is bundled.
+  different on Apple, Android and Windows.
+- Text set in Serif, Mono or Display before those fonts shipped with the app
+  keeps the system font it was made with (Georgia, Courier New or a system
+  monospace font, Impact) until Serif, Mono or Display is chosen again.
 - The stage is exactly the canvas's size, so a handle that falls outside it
   can't be reached. The rotate handle moves inside the photo when it would
   (see above), but a resize handle on the canvas edge is still partly cut
@@ -496,5 +501,5 @@ Bundled third-party code and fonts keep their own licences:
   heic2any — MIT; idb — ISC.
 - heic2any includes a build of [libheif](https://github.com/strukturag/libheif)
   (LGPL-3.0) for decoding HEIC photos.
-- Inter, Anton, Pacifico, Dancing Script, Caveat and Great Vibes (via
-  Fontsource) — SIL Open Font License 1.1.
+- Inter, Anton, Gelasio, Courier Prime, Pacifico, Dancing Script, Caveat and
+  Great Vibes (via Fontsource) — SIL Open Font License 1.1.

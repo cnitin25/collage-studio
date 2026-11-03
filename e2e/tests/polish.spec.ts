@@ -239,13 +239,70 @@ test('every text font ships with the app, so text looks the same on every device
     await document.fonts.ready;
     return [...document.fonts].map((f) => f.family.replace(/["']/g, ''));
   });
-  for (const family of ['Inter', 'Anton', 'Pacifico', 'Dancing Script', 'Caveat', 'Great Vibes']) {
+  for (const family of ['Inter', 'Anton', 'Gelasio', 'Courier Prime', 'Pacifico', 'Dancing Script', 'Caveat', 'Great Vibes']) {
     expect(families, family).toContain(family);
   }
   await act(page, 's.addText(); s.stopEditingText()');
   await act(page, `s.select(s.items[0].id); s.requestPanel('Insert')`);
-  await page.getByRole('button', { name: 'Display', exact: true }).click();
-  expect(await state<string>(page, 's.items[0].fontFamily')).toMatch(/^Anton\b/);
+  for (const [chip, family] of [
+    ['Display', /^Anton\b/],
+    ['Serif', /^Gelasio\b/],
+    ['Mono', /^"Courier Prime"/],
+  ] as const) {
+    await page.getByRole('button', { name: chip, exact: true }).click();
+    expect(await state<string>(page, 's.items[0].fontFamily'), chip).toMatch(family);
+  }
+});
+
+test('a text style the browser can’t parse is drawn as best it can, without crashing the editor', async ({ page }) => {
+  // A project file can carry any style or family name: the canvas ignores
+  // a font it can't parse, and so must the wait for its font to load.
+  await act(page, 's.addText(); s.stopEditingText(); s.select(null)');
+  const id = await state<string>(page, 's.items[0].id');
+  await act(page, `s.updateItem('${id}', { fontStyle: 'not-a-style' })`);
+  await page.waitForTimeout(300);
+  await expect(page.getByText('Something went wrong')).toHaveCount(0);
+  // The canvas is its own React root: an error there unmounts every item on
+  // it, with no crash screen to say so.
+  const drawn = (id: string) =>
+    page.evaluate((id) => !!window.Konva.stages[window.Konva.stages.length - 1].findOne('#' + id), id);
+  expect(await drawn(id), 'the text is still on the canvas').toBe(true);
+  expect(await state<string>(page, 's.items[0].fontStyle')).toBe('not-a-style');
+});
+
+test('text drawn before its font has loaded is measured again, and redrawn, once it has', async ({ page }) => {
+  // A bundled font loads the first time something uses it, and the canvas
+  // doesn't wait: the text is first measured and drawn in a fallback font.
+  expect(await page.evaluate(() => document.fonts.check('40px Pacifico')), 'not loaded yet').toBe(false);
+  await act(page, 's.addText(); s.stopEditingText()');
+  const id = await state<string>(page, 's.items[0].id');
+  await act(
+    page,
+    `s.updateItem('${id}', { text: 'Wrapping a few words in a script font', width: 320, fontSize: 40, fontFamily: 'Pacifico, cursive' })`,
+  );
+  await page.waitForFunction(() => document.fonts.check('40px Pacifico'));
+  // The node's lines and width match a fresh measurement, made with the font.
+  await expect
+    .poll(() =>
+      page.evaluate((id) => {
+        const K = window.Konva;
+        const t = K.stages[K.stages.length - 1].findOne<Konva.Text>('#' + id)!;
+        const probe = new K.Text({
+          text: t.text(),
+          width: t.width(),
+          fontSize: t.fontSize(),
+          fontFamily: t.fontFamily(),
+          fontStyle: t.fontStyle(),
+          lineHeight: t.lineHeight(),
+          letterSpacing: t.letterSpacing(),
+        });
+        const lines = (n: Konva.Text) => n.textArr.map((l) => l.text).join('|');
+        const same = lines(probe) === lines(t) && Math.abs(probe.getTextWidth() - t.getTextWidth()) < 0.5;
+        probe.destroy();
+        return same;
+      }, id),
+    )
+    .toBe(true);
 });
 
 test('a crash saves a recovery copy of unsaved work to Projects', async ({ page }) => {

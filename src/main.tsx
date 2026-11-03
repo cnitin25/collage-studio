@@ -37,6 +37,24 @@ import '@fontsource/inter/latin-700-italic.css';
 import '@fontsource/inter/latin-ext-700-italic.css';
 import '@fontsource/anton/latin-400.css';
 import '@fontsource/anton/latin-ext-400.css';
+// Serif and Mono: Gelasio has Georgia's metrics and Courier Prime Courier's
+// widths, so text set in the old system fonts wraps the same in these.
+import '@fontsource/gelasio/latin-400.css';
+import '@fontsource/gelasio/latin-ext-400.css';
+import '@fontsource/gelasio/latin-700.css';
+import '@fontsource/gelasio/latin-ext-700.css';
+import '@fontsource/gelasio/latin-400-italic.css';
+import '@fontsource/gelasio/latin-ext-400-italic.css';
+import '@fontsource/gelasio/latin-700-italic.css';
+import '@fontsource/gelasio/latin-ext-700-italic.css';
+import '@fontsource/courier-prime/latin-400.css';
+import '@fontsource/courier-prime/latin-ext-400.css';
+import '@fontsource/courier-prime/latin-700.css';
+import '@fontsource/courier-prime/latin-ext-700.css';
+import '@fontsource/courier-prime/latin-400-italic.css';
+import '@fontsource/courier-prime/latin-ext-400-italic.css';
+import '@fontsource/courier-prime/latin-700-italic.css';
+import '@fontsource/courier-prime/latin-ext-700-italic.css';
 import '@fontsource/pacifico/400.css';
 import '@fontsource/dancing-script/400.css';
 import '@fontsource/dancing-script/700.css';
