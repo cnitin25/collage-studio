@@ -406,7 +406,8 @@ e2e/                        standalone Playwright project (its own
                              release, clean auto-save previews
     storage.spec.ts          save failures, storage cleanup, unsaved-changes
                              prompts, portable file round trip, save on hide
-    import.spec.ts           oversized photos downscaled on import
+    import.spec.ts           oversized photos downscaled on import; a HEIC
+                             photo converted in its own colours
     panels.spec.ts           mode toggles (status bar / sheet footer), preset
                              icons, print orientation chips, sticky search
     toolbar.spec.ts          icon buttons + tooltips, nothing off-screen from
