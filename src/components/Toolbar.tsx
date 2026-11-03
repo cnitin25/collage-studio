@@ -185,12 +185,12 @@ export default function Toolbar({
           />
           <div className="divider" />
           <ToolButton icon="folder" label="Projects" tip="Open, save, or delete projects" onClick={onOpenProjects} />
-          <ToolButton className="btn-primary" icon="save" label="Save" tip="Save to this browser" onClick={onSave} />
+          <ToolButton className="btn-primary" icon="save" label="Save" tip={`Save to this browser (${MOD}S)`} onClick={onSave} />
           <ToolButton
             className="btn-primary"
             icon="download"
             label="Export"
-            tip="Export as an image"
+            tip={`Export as an image (${MOD}Shift+E)`}
             tipEnd
             onClick={onExport}
             disabled={itemCount === 0}

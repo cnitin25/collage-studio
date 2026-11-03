@@ -182,6 +182,28 @@ never leave your device.
   without changing it records nothing. Editor shortcuts are off while the
   Projects dialog is open — Escape closes it, and keyboard focus stays
   inside it.
+- **Copy, cut and paste.** Ctrl/⌘+C, X and V copy, cut and paste the selected
+  item; each paste lands a step further from the original, and a cut item
+  pastes back where it was. Copying a text item puts its text on the system
+  clipboard too. Pasting what another app copied works as well: an image (a
+  screenshot, a photo copied from a browser) is added as a photo, and text
+  becomes a text box. A copied item can be pasted into another project, and
+  text fields and text selected on the page keep the browser's own copy and
+  paste.
+- **Keyboard shortcuts** (⌘ instead of Ctrl on a Mac):
+
+  | Keys | Action |
+  |---|---|
+  | Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y | Undo, redo |
+  | Ctrl+C, Ctrl+X, Ctrl+V | Copy, cut, paste |
+  | Ctrl+D | Duplicate |
+  | Delete or Backspace | Delete the selected item |
+  | Arrow keys (Shift: 10 px) | Nudge the selected item |
+  | Ctrl+] and Ctrl+[ (with Shift: to the top or bottom) | Bring forward, send backward |
+  | Ctrl+S | Save |
+  | Ctrl+Shift+E | Export the image |
+  | Escape | Finish cropping, or deselect |
+  | Space + drag | Pan the view |
 
 ## Who it's for
 
@@ -330,6 +352,8 @@ e2e/                        standalone Playwright project (its own
     polish.spec.ts           live resize crop/rewrap, rotation snaps, a rotate
                              handle that stays on the stage, snap at any zoom,
                              progress, warmth, fonts, crash recovery
+    shortcuts.spec.ts        copy/cut/paste, images and text pasted from other
+                             apps, fields left alone, Save/Export/layer keys
     helpers.ts               store access, generated test images, image metrics,
                              export pixel analysis
 .github/workflows/ci.yml     lint, type-check, e2e (Chromium, WebKit) and the

@@ -3,6 +3,9 @@ import { useEditorStore } from '../../store/useEditorStore';
 import CollapsiblePanel from './CollapsiblePanel';
 import Slider from '../ui/Slider';
 import { coverCrop, refitCrop, type CropRect } from '../../utils/cover';
+import { isMac } from '../../utils/platform';
+
+const MOD = isMac() ? '⌘' : 'Ctrl+';
 
 export default function CropArrangePanel() {
   const selectedId = useEditorStore((s) => s.selectedId);
@@ -131,10 +134,10 @@ export default function CropArrangePanel() {
       )}
 
       <div className="btn-grid-2" style={{ marginTop: isImage ? 18 : 0 }}>
-        <button className="btn" onClick={() => bringToFront(id)} title="Move to the very top of the stack">Bring to front</button>
-        <button className="btn" onClick={() => sendToBack(id)} title="Move to the very bottom of the stack">Send to back</button>
-        <button className="btn" onClick={() => bringForward(id)} title="Move up one layer">Forward</button>
-        <button className="btn" onClick={() => sendBackward(id)} title="Move down one layer">Backward</button>
+        <button className="btn" onClick={() => bringToFront(id)} title={`Move to the very top of the stack (${MOD}Shift+])`}>Bring to front</button>
+        <button className="btn" onClick={() => sendToBack(id)} title={`Move to the very bottom of the stack (${MOD}Shift+[)`}>Send to back</button>
+        <button className="btn" onClick={() => bringForward(id)} title={`Move up one layer (${MOD}])`}>Forward</button>
+        <button className="btn" onClick={() => sendBackward(id)} title={`Move down one layer (${MOD}[)`}>Backward</button>
       </div>
 
       <p className="subhead">Rotate</p>

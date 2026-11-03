@@ -29,6 +29,17 @@ interface Snapshot {
   lastLayout: LayoutSpec | null;
 }
 
+/** What Copy or Cut took, for Paste. Kept across projects, like a clipboard. */
+export interface ItemClipboard {
+  item: CollageItem;
+  /** What Copy put on the system clipboard as text: a text item's text, else ''. */
+  text: string;
+  /** Put there too, under the app's own type, to know this copy when it's pasted. */
+  token: string;
+  /** How far from the original the next paste lands (each one steps further). */
+  offset: number;
+}
+
 /** The state as of the last save/load, by reference (see hasUnsavedChanges). */
 export interface SavedRef {
   items: CollageItem[];
@@ -54,6 +65,7 @@ interface EditorState {
   exportFileName: string;
   exportFormat: 'png' | 'jpeg';
   styleClipboard: ImageStyle | null;
+  itemClipboard: ItemClipboard | null;
   currentProjectId: string;
   projectName: string;
   layoutLocked: boolean;
@@ -86,6 +98,16 @@ interface EditorState {
   updateItem: (id: string, patch: Partial<CollageItem>) => void;
   removeSelected: () => void;
   duplicateSelected: () => void;
+  /** Copy the selected item for Paste. Returns what to put on the system clipboard, or null with nothing selected. */
+  copySelected: () => ItemClipboard | null;
+  /** Copy, then delete, the selected item: one undo step. Returns as copySelected does. */
+  cutSelected: () => ItemClipboard | null;
+  /**
+   * Paste what the system clipboard holds: the app's token and its text.
+   * While that is what Copy put there, the copied item; text from another app
+   * becomes a text box. Returns whether anything was pasted.
+   */
+  pasteFromClipboard: (from: { text: string; token: string }) => boolean;
   swapItems: (aId: string, bId: string) => void;
   replaceImage: (id: string, image: LoadedImage) => void;
   setBackground: (patch: Partial<CanvasConfig>) => void;
@@ -285,6 +307,29 @@ function pushStep(s: Draft<EditorState>, prev: Snapshot, label: string): void {
   s.futureLabels = [];
 }
 
+/** How far a duplicate or a paste lands from the original, in canvas px. */
+const PASTE_STEP = 28;
+
+/** A text box with the editor's default look, centred across the canvas. */
+function newTextItem(canvas: CanvasConfig, text: string): TextItem {
+  const w = Math.min(680, canvas.width * 0.6);
+  return {
+    id: uid('txt'),
+    type: 'text',
+    x: Math.round((canvas.width - w) / 2),
+    y: Math.round(canvas.height * 0.42),
+    width: w,
+    height: 90,
+    rotation: 0,
+    text,
+    fontFamily: 'Inter, system-ui, sans-serif',
+    fontSize: 64,
+    fontStyle: 'normal',
+    fill: '#15171d',
+    align: 'center',
+  };
+}
+
 function placeImage(img: LoadedImage, canvas: CanvasConfig, index: number): ImageItem {
   const maxW = canvas.width * 0.55;
   const maxH = canvas.height * 0.55;
@@ -359,6 +404,7 @@ export const useEditorStore = create<EditorState>()(
     exportFileName: fileNameForProject(DEFAULT_PROJECT_NAME),
     exportFormat: 'png',
     styleClipboard: null,
+    itemClipboard: null,
     currentProjectId: uid('proj'),
     projectName: DEFAULT_PROJECT_NAME,
     layoutLocked: false,
@@ -403,28 +449,12 @@ export const useEditorStore = create<EditorState>()(
     addText: () => {
       const label = "Add text";
       const prev = snapshot(get());
-      const id = uid('txt');
+      const item = newTextItem(get().canvas, 'Your text');
       set((s) => {
         pushStep(s, prev, label);
-        const w = Math.min(680, s.canvas.width * 0.6);
-        const item: TextItem = {
-          id,
-          type: 'text',
-          x: Math.round((s.canvas.width - w) / 2),
-          y: Math.round(s.canvas.height * 0.42),
-          width: w,
-          height: 90,
-          rotation: 0,
-          text: 'Your text',
-          fontFamily: 'Inter, system-ui, sans-serif',
-          fontSize: 64,
-          fontStyle: 'normal',
-          fill: '#15171d',
-          align: 'center',
-        };
         s.items.push(item);
-        s.selectedId = id;
-        s.editingId = id;
+        s.selectedId = item.id;
+        s.editingId = item.id;
         s.requestedPanel = 'Insert';
       });
     },
@@ -499,14 +529,68 @@ export const useEditorStore = create<EditorState>()(
       const prev = snapshot(get());
       const copy = structuredClone(sel);
       copy.id = uid(sel.type === 'image' ? 'img' : sel.type === 'text' ? 'txt' : 'stk');
-      copy.x += 28;
-      copy.y += 28;
+      copy.x += PASTE_STEP;
+      copy.y += PASTE_STEP;
       set((s) => {
         pushStep(s, prev, label);
         s.items.push(copy);
         s.selectedId = copy.id;
         s.croppingId = null;
       });
+    },
+
+    copySelected: () => {
+      const sel = get().items.find((i) => i.id === get().selectedId);
+      if (!sel) return null;
+      // Committed state is frozen, so the item itself can be kept, not a copy.
+      const clip = { item: sel, text: sel.type === 'text' ? sel.text : '', token: uid('clip'), offset: PASTE_STEP };
+      set({ itemClipboard: clip });
+      return clip;
+    },
+
+    cutSelected: () => {
+      const sel = get().items.find((i) => i.id === get().selectedId);
+      if (!sel) return null;
+      // Pasted after a cut, it goes back where it was.
+      const clip = { item: sel, text: sel.type === 'text' ? sel.text : '', token: uid('clip'), offset: 0 };
+      const prev = snapshot(get());
+      set((s) => {
+        pushStep(s, prev, 'Cut');
+        s.itemClipboard = clip;
+        s.items = s.items.filter((it) => it.id !== sel.id);
+        s.selectedId = null;
+        s.croppingId = null;
+        s.editingId = null;
+      });
+      return clip;
+    },
+
+    pasteFromClipboard: ({ text, token }) => {
+      const clip = get().itemClipboard;
+      // The token says whose copy it is. A browser that drops the app's own
+      // type leaves only the text: still what Copy put there means nothing
+      // else was copied since.
+      const fromCopy = clip !== null && (token ? token === clip.token : text === '' || text === clip.text);
+      let item: CollageItem;
+      if (fromCopy) {
+        item = structuredClone(clip.item);
+        item.id = uid(item.type === 'image' ? 'img' : item.type === 'text' ? 'txt' : 'stk');
+        item.x += clip.offset;
+        item.y += clip.offset;
+      } else if (text.trim()) {
+        item = newTextItem(get().canvas, text);
+      } else {
+        return false;
+      }
+      const prev = snapshot(get());
+      set((s) => {
+        pushStep(s, prev, 'Paste');
+        s.items.push(item);
+        s.selectedId = item.id;
+        s.croppingId = null;
+        if (fromCopy && s.itemClipboard) s.itemClipboard.offset += PASTE_STEP;
+      });
+      return true;
     },
 
     swapItems: (aId, bId) => {
@@ -1241,9 +1325,9 @@ export const useEditorStore = create<EditorState>()(
 // rest of the session. Tracking it here, off the history itself, covers every
 // path at once.
 
-function collectBlobUrls(into: Set<string>, items: CollageItem[], canvas: CanvasConfig): void {
+function collectBlobUrls(into: Set<string>, items: CollageItem[], canvas?: CanvasConfig): void {
   for (const it of items) if (it.type === 'image' && it.src.startsWith('blob:')) into.add(it.src);
-  if (canvas.backgroundImageSrc?.startsWith('blob:')) into.add(canvas.backgroundImageSrc);
+  if (canvas?.backgroundImageSrc?.startsWith('blob:')) into.add(canvas.backgroundImageSrc);
 }
 
 const trackedBlobUrls = new Set<string>();
@@ -1253,9 +1337,13 @@ useEditorStore.subscribe((s, prev) => {
   if (s.items !== prev.items || s.canvas !== prev.canvas) collectBlobUrls(trackedBlobUrls, s.items, s.canvas);
 
   // A URL can only become unreachable when a snapshot is dropped, which always
-  // changes past/future (or ends a gesture). Only then pay for the full scan.
+  // changes past/future (or ends a gesture), or when the clipboard lets go of
+  // an item. Only then pay for the full scan.
   const historyChanged =
-    s.past !== prev.past || s.future !== prev.future || (prev._pending !== null && s._pending === null);
+    s.past !== prev.past ||
+    s.future !== prev.future ||
+    (prev._pending !== null && s._pending === null) ||
+    s.itemClipboard?.item !== prev.itemClipboard?.item;
   if (!historyChanged) return;
 
   const reachable = new Set<string>();
@@ -1263,6 +1351,8 @@ useEditorStore.subscribe((s, prev) => {
   for (const snap of s.past) collectBlobUrls(reachable, snap.items, snap.canvas);
   for (const snap of s.future) collectBlobUrls(reachable, snap.items, snap.canvas);
   if (s._pending) collectBlobUrls(reachable, s._pending.snap.items, s._pending.snap.canvas);
+  // A copied photo must still paste after everything else showing it is gone.
+  if (s.itemClipboard) collectBlobUrls(reachable, [s.itemClipboard.item]);
 
   for (const url of trackedBlobUrls) {
     if (!reachable.has(url)) {

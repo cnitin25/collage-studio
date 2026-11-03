@@ -26,6 +26,9 @@ import { requestPersistentStorage } from './storage/persistence';
 import { confirmRestore, rememberProject, restoreLastProject } from './storage/session';
 import Icon from './components/ui/Icon';
 
+/** The app's own clipboard type: marks what Copy put there, so Paste knows it. */
+const CLIPBOARD_TYPE = 'application/x-collage-studio-item';
+
 function describeSaveError(err: unknown): string {
   if (err instanceof DOMException && err.name === 'QuotaExceededError') {
     return "the browser's storage for this site is full. Delete old projects, or use Projects → Export file to keep a copy.";
@@ -324,9 +327,32 @@ export default function App() {
   useEffect(() => {
     if (projectsOpen) return;
     const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      // Save and Export work from a text field too, as in any editor.
+      if (mod && key === 's' && !e.shiftKey) {
+        e.preventDefault();
+        void handleSave();
+        return;
+      }
+      if (mod && key === 'e' && e.shiftKey) {
+        e.preventDefault();
+        if (useEditorStore.getState().items.length) void handleExport();
+        return;
+      }
       const target = e.target as HTMLElement;
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable) return;
-      const mod = e.ctrlKey || e.metaKey;
+      // Brackets: one layer up or down; with Shift (which types {}), to the top or bottom.
+      const up = e.key === ']' || e.key === '}';
+      const down = e.key === '[' || e.key === '{';
+      const selId = useEditorStore.getState().selectedId;
+      if (mod && (up || down) && selId) {
+        e.preventDefault();
+        const st = useEditorStore.getState();
+        if (up) (e.shiftKey ? st.bringToFront : st.bringForward)(selId);
+        else (e.shiftKey ? st.sendToBack : st.sendBackward)(selId);
+        return;
+      }
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
@@ -353,7 +379,42 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [projectsOpen, undo, redo, removeSelected, select, duplicateSelected]);
+  }, [projectsOpen, undo, redo, removeSelected, select, duplicateSelected, handleSave, handleExport]);
+
+  // Copy, cut and paste, through the browser's own clipboard events: Copy
+  // needs no permission, and a paste can bring in what another app copied —
+  // images (a screenshot) become photos, text becomes a text box. Text fields,
+  // and text selected on the page, keep the browser's behaviour.
+  useEffect(() => {
+    if (projectsOpen) return;
+    const inField = (t: EventTarget | null) =>
+      t instanceof HTMLElement && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
+    const onCopyOrCut = (e: ClipboardEvent) => {
+      if (inField(e.target) || window.getSelection()?.toString()) return;
+      const st = useEditorStore.getState();
+      const clip = e.type === 'cut' ? st.cutSelected() : st.copySelected();
+      if (!clip || !e.clipboardData) return;
+      e.preventDefault();
+      e.clipboardData.setData('text/plain', clip.text);
+      e.clipboardData.setData(CLIPBOARD_TYPE, clip.token);
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      if (inField(e.target) || !e.clipboardData) return;
+      const data = e.clipboardData;
+      e.preventDefault();
+      const files = Array.from(data.files);
+      if (files.length) void importPhotos(files);
+      else useEditorStore.getState().pasteFromClipboard({ text: data.getData('text/plain'), token: data.getData(CLIPBOARD_TYPE) });
+    };
+    document.addEventListener('copy', onCopyOrCut);
+    document.addEventListener('cut', onCopyOrCut);
+    document.addEventListener('paste', onPaste);
+    return () => {
+      document.removeEventListener('copy', onCopyOrCut);
+      document.removeEventListener('cut', onCopyOrCut);
+      document.removeEventListener('paste', onPaste);
+    };
+  }, [projectsOpen]);
 
   return (
     <div className={`app ${toolsOpen ? 'sheet-open' : ''} ${toolsOpen && sheetExpanded ? 'sheet-expanded' : ''}`}>
