@@ -94,6 +94,25 @@ export interface TextItem extends BaseItem {
    * leaves room for scripts with tall matras/ascenders (e.g. Devanagari) so
    * adjacent lines don't visually touch — Konva's own default of 1 is too tight. */
   lineHeight?: number;
+  /** extra space after each letter, px */
+  letterSpacing?: number;
+  /** an outline round the letters, `outlineWidth` px wide, drawn behind the
+   * fill so it never thins them; none while the width is 0 or unset */
+  outlineColor?: string;
+  outlineWidth?: number;
+  shadow?: ShadowStyle;
+  /** a box behind the lines of text */
+  background?: TextBackground;
+}
+
+export interface TextBackground {
+  color: string;
+  /** 0–1 */
+  opacity: number;
+  /** px beyond the text on every side */
+  padding: number;
+  /** corner radius, px */
+  radius: number;
 }
 
 export const DEFAULT_LINE_HEIGHT = 1.4;

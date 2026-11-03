@@ -91,6 +91,38 @@ describe('importProjectFile reads', () => {
     expect(sticker).toMatchObject({ emoji: '🌴', width: 80, height: 80 });
   });
 
+  it('text effects, clamped to what the editor can draw', async () => {
+    const out = await open(
+      project({
+        items: [
+          {
+            type: 'text',
+            x: 0,
+            y: 0,
+            width: 400,
+            text: 'Hi',
+            fontSize: 50,
+            letterSpacing: 12,
+            outlineColor: '#ff0000',
+            outlineWidth: 900,
+            shadow: { color: '#000', blur: 6, opacity: 0.5, offsetX: 2, offsetY: 3 },
+            background: { color: '#ffd84d', opacity: 3, padding: 16, radius: 8 },
+          },
+          { type: 'text', x: 0, y: 0, width: 400, text: 'Broken', fontSize: 50, background: { color: '#fff', padding: 4 } },
+        ],
+      }),
+    );
+    const [styled, broken] = out.items as TextItem[];
+    expect(styled).toMatchObject({
+      letterSpacing: 12,
+      outlineColor: '#ff0000',
+      outlineWidth: 100,
+      shadow: { color: '#000', blur: 6, opacity: 0.5, offsetX: 2, offsetY: 3 },
+      background: { color: '#ffd84d', opacity: 1, padding: 16, radius: 8 },
+    });
+    expect(broken.background, 'a highlight missing fields is left out').toBeUndefined();
+  });
+
   it('the layout and spacing, or safe defaults when they are missing or broken', async () => {
     const out = await open(project());
     expect(out.spacing).toEqual({ margin: 24, gutter: 12, padding: 0 });

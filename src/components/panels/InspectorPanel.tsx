@@ -7,6 +7,7 @@ import CropArrangePanel from './CropArrangePanel';
 import EnhancePresetsPanel from './EnhancePresetsPanel';
 import StylePanel from './StylePanel';
 import InsertPanel from './InsertPanel';
+import TextEffectsPanel from './TextEffectsPanel';
 import BackgroundPanel from './BackgroundPanel';
 import AlignPanel from './AlignPanel';
 import HistoryPanel from './HistoryPanel';
@@ -62,7 +63,7 @@ function PresetShape({ width, height }: { width: number; height: number }) {
 const NAV_GROUPS: { id: string; label: string; icon: IconName; titles: readonly string[]; needsSelection?: boolean }[] = [
   { id: 'canvas', label: 'Canvas', icon: 'ratio', titles: ['Canvas'] },
   { id: 'layout', label: 'Layout', icon: 'grid', titles: ['Layout'] },
-  { id: 'insert', label: 'Insert', icon: 'text', titles: ['Insert'] },
+  { id: 'insert', label: 'Insert', icon: 'text', titles: ['Insert', 'Text Effects'] },
   {
     id: 'photo',
     label: 'Photo',
@@ -338,6 +339,7 @@ export default function InspectorPanel({ open: drawerOpen, onClose, collapsed, e
       <LayoutPanel />
 
       <InsertPanel />
+      <TextEffectsPanel />
 
       <AlignPanel />
       <CropArrangePanel />

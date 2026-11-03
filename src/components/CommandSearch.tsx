@@ -19,6 +19,7 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
   const selectedIsImage = useEditorStore(
     (s) => s.items.find((i) => i.id === s.selectedId)?.type === 'image',
   );
+  const selectedIsText = useEditorStore((s) => s.items.find((i) => i.id === s.selectedId)?.type === 'text');
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -51,7 +52,7 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
   // StylePanel.tsx's own `if (!sel || sel.type !== 'image') return null;`) —
   // without that, requestPanel() would silently do nothing.
   const isUnavailable = (cmd: PanelCommand) =>
-    (cmd.requiresPhoto && !selectedIsImage) || (cmd.requiresSelection && !selectedId);
+    (cmd.requiresPhoto && !selectedIsImage) || (cmd.requiresText && !selectedIsText) || (cmd.requiresSelection && !selectedId);
 
   const selectCommand = (cmd: PanelCommand) => {
     if (isUnavailable(cmd)) return;
@@ -105,6 +106,7 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
         <div className="overflow-menu command-search-results" role="listbox" id="command-search-listbox">
           {results.map((cmd, i) => {
             const disabled = isUnavailable(cmd);
+            const needs = cmd.requiresPhoto ? 'a photo' : cmd.requiresText ? 'a text box' : 'something';
             return (
               <button
                 key={cmd.label}
@@ -112,14 +114,14 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
                 role="option"
                 aria-selected={i === activeIndex}
                 disabled={disabled}
-                title={disabled ? (cmd.requiresPhoto ? 'Select a photo first' : 'Select something first') : undefined}
+                title={disabled ? `Select ${needs} first` : undefined}
                 onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => selectCommand(cmd)}
               >
                 {cmd.label}
                 {disabled && (
                   <span className="dim" style={{ marginLeft: 6, fontWeight: 400 }}>
-                    — {cmd.requiresPhoto ? 'select a photo' : 'select something'}
+                    — select {needs}
                   </span>
                 )}
               </button>

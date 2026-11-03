@@ -48,6 +48,12 @@ never leave your device.
   controls, and an emoji sticker palette. Every text font ships with the app
   (Inter, Anton for Display, and four calligraphy fonts), so a collage's text
   looks the same on every device. Resizing a text box rewraps it as you drag.
+  - **Text Effects**: letter and line spacing, an outline (drawn behind the
+    letters, so they keep their weight), a shadow (blur, distance,
+    direction, opacity, colour) and a highlight — a rounded, padded box
+    behind the lines of text. Each slider drag or toggle is one undo step,
+    and the effects survive saving and portable project files.
+  - Text and stickers have an Opacity slider, as photos do.
 - **Backgrounds** — solid color, gradient, image (with blur), or generated
   pattern (dots/grid/stripes/checker). An uploaded background image is kept
   — saves and exported files included — while another background type is
@@ -354,6 +360,8 @@ e2e/                        standalone Playwright project (its own
                              progress, warmth, fonts, crash recovery
     shortcuts.spec.ts        copy/cut/paste, images and text pasted from other
                              apps, fields left alone, Save/Export/layer keys
+    text-style.spec.ts       outline, shadow (under the outline), highlight box,
+                             letter/line spacing, text and sticker opacity
     helpers.ts               store access, generated test images, image metrics,
                              export pixel analysis
 .github/workflows/ci.yml     lint, type-check, e2e (Chromium, WebKit) and the

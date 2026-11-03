@@ -153,21 +153,21 @@ export default function CropArrangePanel() {
             <button className="chip" onClick={() => flipItem(id, 'x')} title="Flip horizontally (mirror left-right)">Flip H</button>
             <button className="chip" onClick={() => flipItem(id, 'y')} title="Flip vertically (mirror top-bottom)">Flip V</button>
           </div>
-
-          <div className="sliders" style={{ marginTop: 14 }}>
-            <Slider
-              label="Opacity"
-              suffix="%"
-              value={sel.opacity ?? 100}
-              min={0}
-              max={100}
-              onStart={() => beginChange('Opacity')}
-              onChange={(v) => updateItemLive(id, { opacity: v })}
-              onEnd={commitChange}
-            />
-          </div>
         </>
       )}
+
+      <div className="sliders" style={{ marginTop: 14 }}>
+        <Slider
+          label="Opacity"
+          suffix="%"
+          value={sel.opacity ?? 100}
+          min={0}
+          max={100}
+          onStart={() => beginChange('Opacity')}
+          onChange={(v) => updateItemLive(id, { opacity: v })}
+          onEnd={commitChange}
+        />
+      </div>
     </CollapsiblePanel>
   );
 }

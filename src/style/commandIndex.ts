@@ -15,6 +15,8 @@ export interface PanelCommand {
    * e.g. StylePanel.tsx's `if (!sel || sel.type !== 'image') return null;`).
    * Without one, opening it would do nothing — no matching panel is mounted. */
   requiresPhoto?: boolean;
+  /** This panel only renders when the selection is a text box (TextEffectsPanel). */
+  requiresText?: boolean;
 }
 
 export const PANEL_COMMANDS: PanelCommand[] = [
@@ -32,6 +34,12 @@ export const PANEL_COMMANDS: PanelCommand[] = [
     label: 'Insert text or sticker',
     panel: 'Insert',
     keywords: ['add text', 'sticker', 'emoji', 'font'],
+  },
+  {
+    label: 'Text effects',
+    panel: 'Text Effects',
+    keywords: ['outline', 'stroke', 'text shadow', 'highlight', 'text background', 'letter spacing', 'line spacing', 'line height'],
+    requiresText: true,
   },
   {
     label: 'Photo alignment',

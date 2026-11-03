@@ -32,6 +32,7 @@ export default function StickerNode({
       y={item.y}
       fontSize={item.fontSize}
       rotation={item.rotation}
+      opacity={(item.opacity ?? 100) / 100}
       draggable={!locked}
       onClick={onSelect}
       onTap={onSelect}

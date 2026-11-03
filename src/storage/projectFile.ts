@@ -12,6 +12,7 @@ import type {
   ShadowStyle,
   StickerItem,
   TextAlign,
+  TextBackground,
   TextItem,
 } from '../types';
 import type { LayoutSpec, LayoutType, SpacingOptions } from '../layout/types';
@@ -252,6 +253,13 @@ const IMAGE: Readers<Omit<ImageItem, keyof BaseItem | 'src' | 'assetId'>> = {
   flipY: bool,
 };
 
+const TEXT_BACKGROUND: Readers<TextBackground> = {
+  color: str,
+  opacity: within(0, 1),
+  padding: within(0, 500),
+  radius: within(0, 500),
+};
+
 const TEXT: Readers<Omit<TextItem, keyof BaseItem>> = {
   text: str,
   fontFamily: str,
@@ -260,6 +268,11 @@ const TEXT: Readers<Omit<TextItem, keyof BaseItem>> = {
   fill: str,
   align: oneOf(ALIGNS),
   lineHeight: pos,
+  letterSpacing: within(-100, 500),
+  outlineColor: str,
+  outlineWidth: within(0, 100),
+  shadow: (v) => readWhole(v, SHADOW),
+  background: (v) => readWhole(v, TEXT_BACKGROUND),
 };
 
 const STICKER: Readers<Omit<StickerItem, keyof BaseItem>> = { emoji: str, fontSize: pos };

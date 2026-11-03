@@ -103,6 +103,7 @@ function InPlaceEditor({ item, hostRef, getStage }: Props & { item: TextItem }) 
         fontWeight: item.fontStyle.includes('bold') ? 700 : 400,
         fontStyle: item.fontStyle.includes('italic') ? 'italic' : 'normal',
         lineHeight: item.lineHeight ?? DEFAULT_LINE_HEIGHT,
+        letterSpacing: (item.letterSpacing ?? 0) * scale,
         color: item.fill,
         textAlign: item.align,
         transform: `rotate(${node.getAbsoluteRotation()}deg)`,
