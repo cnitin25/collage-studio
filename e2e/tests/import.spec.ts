@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { test, expect, type Page } from '@playwright/test';
 import { state } from './helpers';
 
@@ -58,6 +60,40 @@ test('an oversized PNG with transparency stays a PNG', async ({ page }) => {
   const item = await importFile(page, 'big.png', 'image/png', await makeImage(page, 3000, 5000, 'image/png', true));
   expect(item.naturalHeight).toBe(4096);
   expect(await storedType(page, item.src)).toBe('image/png');
+});
+
+test('a HEIC photo is converted to a JPEG of the same picture, in its own colours', async ({ page }) => {
+  test.slow();
+  // The two fixtures are the same 1600x1200 picture, one as HEIC, one as JPEG.
+  for (const [name, mimeType] of [
+    ['photo.jpg', 'image/jpeg'],
+    ['photo.heic', 'image/heic'],
+  ]) {
+    const buffer = readFileSync(fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url)));
+    await page.locator('.stage-host input[type="file"]').setInputFiles({ name, mimeType, buffer });
+  }
+  await expect.poll(() => state<number>(page, 's.items.length'), { timeout: 60_000 }).toBe(2);
+  const [jpeg, heic] = await state<{ naturalWidth: number; naturalHeight: number; src: string }[]>(page, 's.items');
+  expect([heic.naturalWidth, heic.naturalHeight]).toEqual([jpeg.naturalWidth, jpeg.naturalHeight]);
+  expect(await storedType(page, heic.src)).toBe('image/jpeg');
+  const mean = (src: string) =>
+    page.evaluate(async (src) => {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      const c = document.createElement('canvas');
+      [c.width, c.height] = [img.naturalWidth, img.naturalHeight];
+      const g = c.getContext('2d')!;
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      const sum = [0, 0, 0];
+      for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) sum[k] += d[i + k];
+      return sum.map((v) => v / (d.length / 4));
+    }, src);
+  // heic2any, the converter before, shifted these by up to 10 levels (it
+  // read the photo's colours with the wrong conversion from YCbCr).
+  const [want, got] = [await mean(jpeg.src), await mean(heic.src)];
+  want.forEach((w, k) => expect(Math.abs(got[k] - w), `channel ${k}`).toBeLessThanOrEqual(3));
 });
 
 test('a photo within the limit is kept exactly as it was', async ({ page }) => {

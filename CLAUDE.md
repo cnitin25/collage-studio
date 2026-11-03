@@ -35,7 +35,11 @@ specific to working here with Claude Code, or worth calling out twice.
 - `npm run test:e2e` reuses whatever is already listening on port 5173
   (`reuseExistingServer`). If another project's dev server holds that port,
   every test runs against the wrong app and fails with "element not found" —
-  check the port before debugging the tests.
+  check the port before debugging the tests. This project's own dev server
+  counts too: one left running from before a dependency was added or
+  swapped serves its old pre-bundled packages, and the new one fails to load
+  with a 504 ("Outdated Optimize Dep"). A run killed by a timeout can leave
+  Playwright's server orphaned on 5173 the same way.
 - `AGENTS.md`'s **Storage**, **State And History** and **Canvas And Export**
   sections record rules the code depends on (storage lock, immutable assets,
   `refitCrop` over `coverCrop`, reference-based unsaved-changes tracking,

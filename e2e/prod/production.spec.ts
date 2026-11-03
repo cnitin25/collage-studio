@@ -49,7 +49,11 @@ test('the production build works under its security policy', async ({ page }) =>
   const photos = page.locator('.thumb-item');
 
   const response = await page.goto('/');
-  expect(response?.headers()['content-security-policy'], 'served with a CSP').toContain("default-src 'self'");
+  const csp = response?.headers()['content-security-policy'] ?? '';
+  expect(csp, 'served with a CSP').toContain("default-src 'self'");
+  // No script may evaluate strings as code: that's most of what a CSP
+  // protects against cross-site scripting.
+  expect(csp, "script-src without 'unsafe-eval'").not.toContain("'unsafe-eval'");
 
   await test.step('service worker and fonts', async () => {
     expect(await page.evaluate(() => navigator.serviceWorker.ready.then((r) => !!r.active))).toBe(true);

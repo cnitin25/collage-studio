@@ -8,7 +8,8 @@ never leave your device.
 ## What it does
 
 - **Import** — drag-and-drop or click to browse; multiple photos at once,
-  including HEIC/HEIF (converted to JPEG automatically, fully offline).
+  including HEIC/HEIF (converted to JPEG automatically, fully offline, in
+  the photo's own colours).
   Photos larger than 4096 px on their long side are scaled down to 4096 on
   import (still sharp for every preset at 1×–2× export), and a batch is
   decoded two at a time — so a phone can hold a full collage of camera photos
@@ -164,7 +165,9 @@ never leave your device.
 - **Locked down** — the site is served with a Content-Security-Policy (in
   `vercel.json`) that only lets the page load scripts, images and data from
   itself, so the "nothing leaves your device" promise is enforced by the
-  browser, not just by the code. `npm run preview` serves the same headers.
+  browser, not just by the code. No script may run code built from strings
+  (no `'unsafe-eval'`), which is most of what such a policy guards against
+  cross-site scripting. `npm run preview` serves the same headers.
 - **Desktop toolbar** — icon buttons with tooltips (hover for the name and
   keyboard shortcut; ⌘ on a Mac). A disabled button's tooltip says what it
   needs ("select a photo first"). Between 769 and 1000 px wide, Duplicate,
@@ -332,7 +335,8 @@ To use it from another device on the same network (e.g. a phone), run
 - **Zustand + immer** — editor state, with a bounded undo/redo history
 - **IndexedDB** (via a small wrapper in `src/storage/`) — project + image
   persistence
-- **react-dropzone**, **heic2any** — file ingestion, including HEIC decode
+- **react-dropzone**, **heic-to** (libheif compiled to JavaScript) — file
+  ingestion, including HEIC decode
 - **Vitest** (unit), **Playwright** (end-to-end, Chromium and WebKit),
   **ESLint** with typescript-eslint and the React Hooks rules, **GitHub
   Actions** — checks on every change
@@ -473,11 +477,10 @@ e2e/                        standalone Playwright project (its own
 - Konva is split into its own vendor chunk (`vite.config.ts`) so app-code
   updates don't force a re-download of it, but it still loads on first
   visit since the canvas is needed immediately — there's no further win
-  available from deferring it. HEIC decoding (`heic2any`, ~1.3MB) is
-  already lazy-loaded and only fetched the first time a HEIC file is used.
-- heic2any converts in a worker that evaluates code from strings, so the
-  Content-Security-Policy has to allow `'unsafe-eval'`. Scripts can still
-  only come from the site itself; a WASM-based decoder would remove the need.
+  available from deferring it. HEIC decoding (heic-to, 3.2 MB, 0.8 MB
+  compressed) is loaded only the first time a HEIC photo is added, but the
+  offline install downloads it with everything else, so HEIC works offline
+  too.
 - Only the palette's 24 emoji are bundled images. Any other emoji in a
   sticker (from an older project or a project file) is still drawn with each
   device's own emoji font, so it looks different on Apple, Android and
@@ -507,10 +510,11 @@ WITHOUT ANY WARRANTY; see [LICENSE](LICENSE) for the full terms.
 
 Bundled third-party code and fonts keep their own licences:
 
-- React, Konva, react-konva, Zustand, Immer, react-dropzone, use-image and
-  heic2any — MIT; idb — ISC.
-- heic2any includes a build of [libheif](https://github.com/strukturag/libheif)
-  (LGPL-3.0) for decoding HEIC photos.
+- React, Konva, react-konva, Zustand, Immer, react-dropzone and use-image —
+  MIT; idb — ISC.
+- [heic-to](https://github.com/hoppergee/heic-to) (LGPL-3.0) and the build of
+  [libheif](https://github.com/strukturag/libheif) (LGPL-3.0) it includes
+  decode HEIC photos.
 - Inter, Anton, Gelasio, Courier Prime, Pacifico, Dancing Script, Caveat and
   Great Vibes (via Fontsource) — SIL Open Font License 1.1.
 - The sticker images are [Twemoji](https://github.com/jdecked/twemoji)

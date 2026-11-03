@@ -35,7 +35,7 @@ test('Later puts the notice away', async ({ page }) => {
 
 test('code that can no longer be fetched says the app was updated, and offers a reload', async ({ page }) => {
   // The HEIC converter loads on demand; after a release its old file is gone.
-  await page.route(/heic2any/, (route) => route.abort());
+  await page.route(/heic-to/, (route) => route.abort());
   await page
     .locator('.stage-host input[type=file]')
     .setInputFiles(fileURLToPath(new URL('../fixtures/photo.heic', import.meta.url)));
