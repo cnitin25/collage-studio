@@ -7,7 +7,7 @@ import type { ImageItem } from '../../types';
 import { refitCrop } from '../../utils/cover';
 import { drawShapePath, traceShapePath } from '../../utils/shapes';
 import { registerImageNode } from '../../utils/imageNodeRegistry';
-import { warmthFilter } from '../../utils/warmth';
+import { filterPipeline, hasAdjustments } from '../../utils/adjustments';
 import { UI_OVERLAY } from './overlay';
 
 interface Props {
@@ -105,34 +105,10 @@ export default function ImageNode({
   const borderRef = useRef<Konva.Shape>(null);
 
   const f = item.filters ?? {};
-  const hasFilters = !!(
-    f.brightness ||
-    f.contrast ||
-    f.saturation ||
-    f.hue ||
-    f.warmth ||
-    f.enhance ||
-    f.grayscale ||
-    f.sepia ||
-    f.blur
-  );
-
-  const filters = useMemo(() => {
-    const list: Array<typeof Konva.Filters.Brighten> = [];
-    if (f.brightness) list.push(Konva.Filters.Brighten);
-    if (f.contrast) list.push(Konva.Filters.Contrast);
-    // A new function per value: Konva re-runs filters when this list changes,
-    // not when a value only the function closes over does.
-    if (f.warmth) list.push(warmthFilter(f.warmth));
-    if (f.hue || f.saturation) list.push(Konva.Filters.HSL);
-    if (f.enhance) list.push(Konva.Filters.Enhance);
-    // Grayscale and sepia are mutually exclusive full-image recolors —
-    // applied last among color ops, after any brightness/contrast/hue shift.
-    if (f.grayscale) list.push(Konva.Filters.Grayscale);
-    else if (f.sepia) list.push(Konva.Filters.Sepia);
-    if (f.blur) list.push(Konva.Filters.Blur);
-    return list;
-  }, [f.brightness, f.contrast, f.saturation, f.hue, f.warmth, f.enhance, f.grayscale, f.sepia, f.blur]);
+  const hasFilters = hasAdjustments(item.filters);
+  // Rebuilt whenever the filters change: they are replaced, never edited in
+  // place, so moving or resizing the photo keeps the same object and skips this.
+  const filters = useMemo(() => filterPipeline(item.filters ?? {}), [item.filters]);
 
   // Expose the rendered node so sidebar panels (e.g. the histogram) can read
   // its current filtered/cropped pixels, not just the original source file.
@@ -340,7 +316,7 @@ export default function ImageNode({
           crop={item.crop}
           opacity={opacity}
           filters={filters}
-          brightness={(f.brightness ?? 0) / 100}
+          // Konva's own filters read these off the node (utils/adjustments).
           contrast={f.contrast ?? 0}
           saturation={(f.saturation ?? 0) / 50}
           hue={-(f.hue ?? 0)}

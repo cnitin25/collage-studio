@@ -219,6 +219,12 @@ const FILTERS: Readers<ImageFilters> = {
   enhance: within(0, 100),
   grayscale: bool,
   sepia: bool,
+  exposure: within(-100, 100),
+  highlights: within(-100, 100),
+  shadows: within(-100, 100),
+  vibrance: within(-100, 100),
+  sharpen: within(0, 100),
+  vignette: within(-100, 100),
   presetId: oneOf(PRESET_IDS),
   presetStrength: within(0, 100),
 };

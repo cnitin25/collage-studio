@@ -17,7 +17,13 @@ import { computeLayout } from '../layout/strategies';
 import { coverCrop, refitCrop } from '../utils/cover';
 import { itemSize } from '../utils/itemBox';
 import { FRAMES, type FrameId } from '../style/frames';
-import { ENHANCE_PRESETS, DEFAULT_PRESET_STRENGTH, NEUTRAL_FILTERS, scaleEnhanceFilters } from '../style/enhancePresets';
+import {
+  ENHANCE_PRESETS,
+  DEFAULT_PRESET_STRENGTH,
+  NEUTRAL_FILTERS,
+  keptEffects,
+  scaleEnhanceFilters,
+} from '../style/enhancePresets';
 import type { SerializedState } from '../storage/projects';
 import { uid } from '../utils/id';
 import { shuffle } from '../utils/random';
@@ -872,9 +878,10 @@ export const useEditorStore = create<EditorState>()(
         const it = s.items.find((i) => i.id === selId);
         if (!it || it.type !== 'image') return;
         it.filters = alreadyActive
-          ? { ...NEUTRAL_FILTERS }
+          ? { ...NEUTRAL_FILTERS, ...keptEffects(it.filters) }
           : {
               ...scaleEnhanceFilters(recipe.filters, DEFAULT_PRESET_STRENGTH),
+              ...keptEffects(it.filters),
               presetId: preset,
               presetStrength: DEFAULT_PRESET_STRENGTH,
             };
@@ -889,6 +896,7 @@ export const useEditorStore = create<EditorState>()(
         if (!recipe) return;
         it.filters = {
           ...scaleEnhanceFilters(recipe.filters, strengthPct),
+          ...keptEffects(it.filters),
           presetId: it.filters.presetId,
           presetStrength: strengthPct,
         };

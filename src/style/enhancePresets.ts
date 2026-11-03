@@ -10,7 +10,26 @@ export const NEUTRAL_FILTERS: ImageFilters = {
   enhance: 0,
   grayscale: false,
   sepia: false,
+  exposure: 0,
+  highlights: 0,
+  shadows: 0,
+  vibrance: 0,
+  sharpen: 0,
+  vignette: 0,
 };
+
+/**
+ * Detail and effects: a preset sets a photo's light and colour, and leaves
+ * these as they were — choosing a look shouldn't take away a vignette.
+ */
+const EFFECT_KEYS = ['sharpen', 'vignette', 'blur'] as const;
+
+/** The detail and effects set on a photo, to carry across a preset change. */
+export function keptEffects(filters: ImageFilters | undefined): ImageFilters {
+  const kept: ImageFilters = {};
+  for (const key of EFFECT_KEYS) if (filters?.[key]) kept[key] = filters[key];
+  return kept;
+}
 
 // New preset clicks start here rather than at 100% — the original full-recipe
 // values read as too aggressive as a default (specifically reported for
@@ -42,7 +61,18 @@ export const ENHANCE_PRESETS: { id: EnhancePresetId; label: string; filters: Ima
   },
 ];
 
-const NUMERIC_KEYS = ['brightness', 'contrast', 'saturation', 'hue', 'warmth', 'enhance'] as const;
+const NUMERIC_KEYS = [
+  'brightness',
+  'contrast',
+  'saturation',
+  'hue',
+  'warmth',
+  'enhance',
+  'exposure',
+  'highlights',
+  'shadows',
+  'vibrance',
+] as const;
 
 /**
  * Scale a preset's numeric fields by strengthPct (0..100) of its full recipe.

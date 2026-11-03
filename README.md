@@ -23,9 +23,11 @@ never leave your device.
   direction (Masonry included). Suggested layouts are ranked for the current
   photo order (layouts place photos in order), so Shuffle re-ranks them — the
   panel says so.
-- **Per-photo editing** — crop (drag + zoom), brightness/contrast/
-  saturation/blur, **warmth** (colour temperature) and hue, one-click enhance
-  presets (Brighten, Darken, Antique, Vivid, Warm, Auto) with an adjustable
+- **Per-photo editing** — crop (drag + zoom); adjustments for light
+  (**exposure**, brightness, contrast, **highlights**, **shadows**), colour
+  (**warmth** — colour temperature — **vibrance**, saturation, hue) and detail
+  and effects (**sharpen**, **vignette**, blur); one-click enhance presets
+  (Brighten, Darken, Antique, Vivid, Warm, Auto) with an adjustable
   strength, grayscale/sepia, borders (solid/dashed/dotted/glyph) and frame
   presets, corner rounding, clip shapes (rectangle/circle/oval/heart), and
   **replace photo** (swap in a different image while keeping that item's
@@ -37,7 +39,18 @@ never leave your device.
     stays visible and a border at the canvas edge isn't cut in half.
   - A photo's opacity shows what's behind it (its shadow fades with it).
   - Moving an Adjust slider by hand takes over from a preset, so the
-    preset's Strength slider can't silently undo the adjustment.
+    preset's Strength slider can't silently undo the adjustment. A preset
+    sets a photo's light and colour, and leaves its Sharpen, Vignette and
+    Blur as they are.
+  - Exposure works in stops, in linear light as a camera does (+50 doubles
+    the light), so it brightens without lifting the blacks; Brightness is
+    the older kind that adds the same amount everywhere, kept so earlier
+    projects look as they did. Highlights and Shadows move only the light
+    or the dark tones, never turn tones over, and keep colours' hue.
+    Vibrance boosts muted colours more than vivid ones.
+  - Sharpen and Vignette look the same on screen and in a 2x or 3x export.
+    The vignette is rounder than a long, thin photo, so it darkens the ends
+    rather than shading all down the long sides.
   - Dragging a crop follows the pointer on flipped and rotated photos too,
     the 90° rotate buttons turn an item about its centre, and rotating with
     the handle settles on 45° steps.
@@ -256,7 +269,8 @@ npm run preview   # serve the build locally (offline/PWA install only works here
 
 ```bash
 npm test            # unit tests (Vitest): layouts, crops, snapping, colour,
-                    # presets, project-file import, undo history
+                    # photo adjustments, presets, project-file import, undo
+                    # history
 npm run lint        # ESLint, type-aware (src/ and the e2e specs)
 npm run typecheck   # the app, the Vite/Vitest configs and the e2e specs
 ```
@@ -318,7 +332,9 @@ src/                      unit tests sit next to the code they cover
   hooks/                   useMediaQuery (+ the layout breakpoints), useReplacePhoto
   utils/                   image loading/downscaling, HEIC conversion, cropping,
                              palette, export/share, platform detection,
-                             importPhotos (import + progress), warmth filter
+                             importPhotos (import + progress), the photo
+                             adjustments (adjustments.ts: each filter, and
+                             the order they run in) and warmth
   components/
     StatusBar.tsx           selection/canvas info + the editor mode toggles
     ModeToggles.tsx         Snap / Lock layout / Swap / Lock ratio / Stay in crop
@@ -375,6 +391,9 @@ e2e/                        standalone Playwright project (its own
                              toolbar fit
     rendering.spec.ts        frame and photo borders at full width and inside,
                              opacity vs shadow, masonry gaps, frame presets
+    adjustments.spec.ts      the Adjust sliders' groups and undo steps; exposure,
+                             highlights/shadows, vibrance, vignette and sharpen
+                             measured in exports (the last two at 1x and 3x)
     input.spec.ts            arrow-key undo, Projects dialog keyboard, Space
                              pan, wheel/pinch zoom and pan, text editor height,
                              presets vs hand-set sliders
@@ -411,7 +430,8 @@ e2e/                        standalone Playwright project (its own
 - The Playwright suite (`e2e/`) covers the mobile responsive layout,
   project storage and recovery, rendering/export output, input handling,
   project files, cropping and the Insert panel; the unit tests cover the
-  layout, geometry, colour, preset, import and undo logic directly. The rest
+  layout, geometry, colour, photo adjustment, preset, import and undo logic
+  directly. The rest
   of the editor is verified manually plus TypeScript and ESLint
   (`npm run typecheck`, `npm run lint`).
 - Konva is split into its own vendor chunk (`vite.config.ts`) so app-code
@@ -434,6 +454,9 @@ e2e/                        standalone Playwright project (its own
   buttons.
 - Groups are flat — a group can't contain another group — and a layout
   arranges grouped photos like any others (the group stays a group).
+- Exposure stops each colour channel at white, as a camera does: a bright
+  sky pushed past white can turn faintly cyan where its green and blue
+  reach white before its red. There is no highlight roll-off.
 
 ## Licence
 

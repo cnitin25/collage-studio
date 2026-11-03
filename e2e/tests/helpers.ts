@@ -5,10 +5,11 @@ import type { Download, Page } from '@playwright/test';
 // is exposed as window.__editorStore in dev builds only (see src/main.tsx),
 // which is what `npm run test:e2e` runs against.
 
-export type ImageKind = 'photo' | 'checker' | 'redblue' | 'solid';
+export type ImageKind = 'photo' | 'checker' | 'redblue' | 'solid' | 'edge';
 
 /** Draw a test image in the page and add it to the canvas. Returns its item id.
- *  `fill` is the colour of a 'solid' image. */
+ *  `fill` is the colour of a 'solid' image. 'edge' is two greys, #505050 on
+ *  the left half and #b0b0b0 on the right. */
 export async function addImage(
   page: Page,
   kind: ImageKind = 'photo',
@@ -36,10 +37,10 @@ export async function addImage(
             img.data[i + 3] = 255;
           }
         ctx.putImageData(img, 0, 0);
-      } else if (kind === 'redblue') {
-        ctx.fillStyle = '#ff0000';
+      } else if (kind === 'redblue' || kind === 'edge') {
+        ctx.fillStyle = kind === 'edge' ? '#505050' : '#ff0000';
         ctx.fillRect(0, 0, w / 2, h);
-        ctx.fillStyle = '#0000ff';
+        ctx.fillStyle = kind === 'edge' ? '#b0b0b0' : '#0000ff';
         ctx.fillRect(w / 2, 0, w / 2, h);
       } else {
         const g = ctx.createLinearGradient(0, 0, w, h);

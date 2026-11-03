@@ -48,6 +48,11 @@ describe('searchPanelCommands', () => {
     expect(searchPanelCommands('gradient').map((c) => c.panel)).toContain('Collage Background');
   });
 
+  it('finds the photo adjustments by name', () => {
+    for (const word of ['exposure', 'highlights', 'shadows', 'vibrance', 'sharpen', 'vignette'])
+      expect(searchPanelCommands(word).map((c) => c.panel), word).toEqual(['Enhance & Adjust']);
+  });
+
   it('finds nothing for an empty query or a word no command knows', () => {
     expect(searchPanelCommands('   ')).toEqual([]);
     expect(searchPanelCommands('quantum')).toEqual([]);

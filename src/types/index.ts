@@ -38,6 +38,13 @@ export interface ImageFilters {
   enhance?: number; // 0..100, Konva's auto-enhance strength (v2)
   grayscale?: boolean; // mutually exclusive with sepia (v2)
   sepia?: boolean; // mutually exclusive with grayscale (v2)
+  // The rest are ours (utils/adjustments), not Konva's.
+  exposure?: number; // -100..100: ±2 stops, in linear light
+  highlights?: number; // -100..100: negative pulls the bright tones down
+  shadows?: number; // -100..100: positive lifts the dark tones
+  vibrance?: number; // -100..100: saturation, most for muted colours
+  sharpen?: number; // 0..100: an unsharp mask
+  vignette?: number; // -100..100: negative darkens the corners, positive lightens them
   // Remembers which preset produced these values and at what strength, so the
   // Strength slider can recompute from the ORIGINAL recipe rather than
   // compounding scale-downs on an already-scaled value.

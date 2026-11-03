@@ -1,8 +1,58 @@
+import { Fragment } from 'react';
 import { useEditorStore } from '../../store/useEditorStore';
 import { ENHANCE_PRESETS } from '../../style/enhancePresets';
+import { hasAdjustments } from '../../utils/adjustments';
+import type { ImageFilters } from '../../types';
 import CollapsiblePanel from './CollapsiblePanel';
 import Slider from '../ui/Slider';
 import Histogram from './Histogram';
+
+/** The filters that are numbers, which a slider can set. */
+type AdjustKey = {
+  [K in keyof ImageFilters]-?: NonNullable<ImageFilters[K]> extends number ? K : never;
+}[keyof ImageFilters];
+
+interface AdjustSlider {
+  key: Exclude<AdjustKey, 'presetStrength'>;
+  label: string;
+  min: number;
+  max: number;
+  suffix?: string;
+}
+
+/** -100 to 100, with no change in the middle. */
+const BOTH_WAYS = { min: -100, max: 100 };
+
+/** The Adjust sliders, by kind: the order the filters run in (utils/adjustments). */
+const ADJUST_GROUPS: { title: string; sliders: AdjustSlider[] }[] = [
+  {
+    title: 'Light',
+    sliders: [
+      { key: 'exposure', label: 'Exposure', ...BOTH_WAYS },
+      { key: 'brightness', label: 'Brightness', ...BOTH_WAYS },
+      { key: 'contrast', label: 'Contrast', ...BOTH_WAYS },
+      { key: 'highlights', label: 'Highlights', ...BOTH_WAYS },
+      { key: 'shadows', label: 'Shadows', ...BOTH_WAYS },
+    ],
+  },
+  {
+    title: 'Color',
+    sliders: [
+      { key: 'warmth', label: 'Warmth', ...BOTH_WAYS },
+      { key: 'vibrance', label: 'Vibrance', ...BOTH_WAYS },
+      { key: 'saturation', label: 'Saturation', ...BOTH_WAYS },
+      { key: 'hue', label: 'Hue', min: -180, max: 180, suffix: '°' },
+    ],
+  },
+  {
+    title: 'Detail & effects',
+    sliders: [
+      { key: 'sharpen', label: 'Sharpen', min: 0, max: 100 },
+      { key: 'vignette', label: 'Vignette', ...BOTH_WAYS },
+      { key: 'blur', label: 'Blur', min: 0, max: 40, suffix: 'px' },
+    ],
+  },
+];
 
 export default function EnhancePresetsPanel() {
   const selectedId = useEditorStore((s) => s.selectedId);
@@ -30,17 +80,7 @@ export default function EnhancePresetsPanel() {
   const activeRecipe = ENHANCE_PRESETS.find((p) => p.id === activePreset);
   const isRecolor = activeRecipe?.filters.grayscale || activeRecipe?.filters.sepia;
 
-  const isDefault = !(
-    f.brightness ||
-    f.contrast ||
-    f.saturation ||
-    f.hue ||
-    f.warmth ||
-    f.enhance ||
-    f.grayscale ||
-    f.sepia ||
-    f.blur
-  );
+  const isDefault = !hasAdjustments(f);
 
   return (
     <CollapsiblePanel
@@ -120,71 +160,30 @@ export default function EnhancePresetsPanel() {
       </div>
       <p className="dim small">
         Presets set a starting look at 60% strength — fine-tune with Strength
-        above, or the sliders below. Grayscale/Sepia toggle independently.
+        above, or the sliders below. They leave Sharpen, Vignette and Blur as
+        they are. Grayscale/Sepia toggle independently.
       </p>
 
-      <p className="subhead">Adjust</p>
-      <div className="sliders">
-        <Slider
-          label="Brightness"
-          suffix=""
-          value={f.brightness ?? 0}
-          min={-100}
-          max={100}
-          onStart={() => beginChange('Brightness')}
-          onChange={(v) => setLive({ brightness: v })}
-          onEnd={commitChange}
-        />
-        <Slider
-          label="Contrast"
-          suffix=""
-          value={f.contrast ?? 0}
-          min={-100}
-          max={100}
-          onStart={() => beginChange('Contrast')}
-          onChange={(v) => setLive({ contrast: v })}
-          onEnd={commitChange}
-        />
-        <Slider
-          label="Saturation"
-          suffix=""
-          value={f.saturation ?? 0}
-          min={-100}
-          max={100}
-          onStart={() => beginChange('Saturation')}
-          onChange={(v) => setLive({ saturation: v })}
-          onEnd={commitChange}
-        />
-        <Slider
-          label="Warmth"
-          suffix=""
-          value={f.warmth ?? 0}
-          min={-100}
-          max={100}
-          onStart={() => beginChange('Warmth')}
-          onChange={(v) => setLive({ warmth: v })}
-          onEnd={commitChange}
-        />
-        <Slider
-          label="Hue"
-          suffix="°"
-          value={f.hue ?? 0}
-          min={-180}
-          max={180}
-          onStart={() => beginChange('Hue')}
-          onChange={(v) => setLive({ hue: v })}
-          onEnd={commitChange}
-        />
-        <Slider
-          label="Blur"
-          value={f.blur ?? 0}
-          min={0}
-          max={40}
-          onStart={() => beginChange('Blur')}
-          onChange={(v) => setLive({ blur: v })}
-          onEnd={commitChange}
-        />
-      </div>
+      {ADJUST_GROUPS.map((group) => (
+        <Fragment key={group.title}>
+          <p className="subhead">{group.title}</p>
+          <div className="sliders">
+            {group.sliders.map((slider) => (
+              <Slider
+                key={slider.key}
+                label={slider.label}
+                suffix={slider.suffix ?? ''}
+                value={f[slider.key] ?? 0}
+                min={slider.min}
+                max={slider.max}
+                onStart={() => beginChange(slider.label)}
+                onChange={(v) => setLive({ [slider.key]: v })}
+                onEnd={commitChange}
+              />
+            ))}
+          </div>
+        </Fragment>
+      ))}
     </CollapsiblePanel>
   );
 }

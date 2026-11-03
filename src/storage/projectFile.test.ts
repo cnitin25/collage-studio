@@ -196,6 +196,20 @@ describe('importProjectFile keeps out of the editor', () => {
     expect(img.filters).toEqual({ brightness: 100, blur: 0 });
   });
 
+  it('photo adjustments, clamped to what the editor offers', async () => {
+    const out = await open(
+      project({
+        items: [
+          photo({
+            filters: { exposure: 300, highlights: -400, shadows: 40, vibrance: 'lots', sharpen: -5, vignette: -250 },
+          }),
+        ],
+      }),
+    );
+    const [img] = out.items as ImageItem[];
+    expect(img.filters).toEqual({ exposure: 100, highlights: -100, shadows: 40, sharpen: 0, vignette: -100 });
+  });
+
   it('a crop that reaches outside the photo, and a shadow missing a field', async () => {
     const out = await open(
       project({
