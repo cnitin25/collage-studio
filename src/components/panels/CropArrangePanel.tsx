@@ -3,9 +3,7 @@ import { useEditorStore } from '../../store/useEditorStore';
 import CollapsiblePanel from './CollapsiblePanel';
 import Slider from '../ui/Slider';
 import { coverCrop, refitCrop, type CropRect } from '../../utils/cover';
-import { isMac } from '../../utils/platform';
-
-const MOD = isMac() ? '⌘' : 'Ctrl+';
+import { MOD } from '../../utils/platform';
 
 export default function CropArrangePanel() {
   const selectedId = useEditorStore((s) => s.selectedId);

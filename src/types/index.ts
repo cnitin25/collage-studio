@@ -21,6 +21,9 @@ export interface BaseItem {
   cornerRadius?: number; // Phase 2
   borderColor?: string; // Phase 2
   borderWidth?: number; // Phase 2
+
+  /** items sharing a groupId are selected, moved and edited together */
+  groupId?: string;
 }
 
 export interface ImageFilters {

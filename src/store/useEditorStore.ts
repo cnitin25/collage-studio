@@ -31,8 +31,9 @@ interface Snapshot {
 
 /** What Copy or Cut took, for Paste. Kept across projects, like a clipboard. */
 export interface ItemClipboard {
-  item: CollageItem;
-  /** What Copy put on the system clipboard as text: a text item's text, else ''. */
+  /** In stacking order. */
+  items: CollageItem[];
+  /** What Copy put on the system clipboard as text: one text item's text, else ''. */
   text: string;
   /** Put there too, under the app's own type, to know this copy when it's pasted. */
   token: string;
@@ -52,7 +53,14 @@ export interface SavedRef {
 interface EditorState {
   canvas: CanvasConfig;
   items: CollageItem[];
+  /** Everything selected, in the order it was selected. */
+  selectedIds: string[];
+  /** The one selected item — null when nothing, or several things, are
+   * selected. Panels for a single item read this, so they step aside for a
+   * multi-selection. Always set through setSelection. */
   selectedId: string | null;
+  /** Phones: taps add to (or take from) the selection instead of replacing it. */
+  multiSelectMode: boolean;
   croppingId: string | null;
   cropLocked: boolean;
   editingId: string | null; // text being edited inline
@@ -144,7 +152,21 @@ interface EditorState {
   requestPanel: (title: string, anchor?: string) => void;
 
   setSpacingLive: (patch: Partial<SpacingOptions>) => void;
+  /** Select an item — with its whole group — or nothing. */
   select: (id: string | null) => void;
+  /** Add an item (and its group) to the selection, or take it out. */
+  toggleSelected: (id: string) => void;
+  /** Select these items and their groups; with `add`, as well as what is selected. */
+  selectMany: (ids: string[], add?: boolean) => void;
+  selectAll: () => void;
+  setMultiSelectMode: (on: boolean) => void;
+  /** One group of everything selected (two or more items). */
+  groupSelected: () => void;
+  ungroupSelected: () => void;
+  /** Even gaps between the selected items (three or more) along an axis. */
+  distributeSelection: (axis: 'x' | 'y') => void;
+  /** Patch several items as one undo step: a multi-item move or resize. */
+  updateItems: (patches: { id: string; patch: Partial<CollageItem> }[], label: string) => void;
   setExportScale: (scale: number) => void;
   setExportFileName: (name: string) => void;
   setExportFormat: (format: 'png' | 'jpeg') => void;
@@ -268,10 +290,65 @@ function storedAutoSave(): boolean {
  * panel: undoing an Enhance preset collapsed Enhance & Adjust out from under
  * the user and left the inspector scrolled down to History.
  */
-function keepLiveSelection(s: { items: CollageItem[]; selectedId: string | null; croppingId: string | null }) {
+function keepLiveSelection(s: Draft<EditorState>) {
   const exists = (id: string | null) => !!id && s.items.some((i) => i.id === id);
-  if (!exists(s.selectedId)) s.selectedId = null;
+  setSelection(s, s.selectedIds.filter(exists));
   if (!exists(s.croppingId) || s.croppingId !== s.selectedId) s.croppingId = null;
+}
+
+/** The selection, kept in step with `selectedId` (the one item, or null). */
+function setSelection(s: Draft<EditorState>, ids: string[]): void {
+  s.selectedIds = ids;
+  s.selectedId = ids.length === 1 ? ids[0] : null;
+}
+
+/** An item and everything grouped with it, in stacking order. */
+function withGroup(items: readonly CollageItem[], id: string): string[] {
+  const groupId = items.find((i) => i.id === id)?.groupId;
+  return groupId ? items.filter((i) => i.groupId === groupId).map((i) => i.id) : [id];
+}
+
+/** The selected items, in stacking order. */
+function selectedItems(s: Pick<EditorState, 'items' | 'selectedIds'>): CollageItem[] {
+  const ids = new Set(s.selectedIds);
+  return s.items.filter((i) => ids.has(i.id));
+}
+
+/** Text for the system clipboard: a lone text item's own text, else nothing. */
+function clipboardText(items: readonly CollageItem[]): string {
+  return items.length === 1 && items[0].type === 'text' ? items[0].text : '';
+}
+
+/**
+ * Copies of items, `offset` px down and right, with new ids — and new group
+ * ids, so copies of a group make a group of their own rather than joining it.
+ */
+function copiesOf(items: readonly CollageItem[], offset: number): CollageItem[] {
+  const groups = new Map<string, string>();
+  return items.map((it) => {
+    const copy = structuredClone<CollageItem>(it);
+    copy.id = uid(it.type === 'image' ? 'img' : it.type === 'text' ? 'txt' : 'stk');
+    copy.x += offset;
+    copy.y += offset;
+    if (it.groupId) {
+      if (!groups.has(it.groupId)) groups.set(it.groupId, uid('grp'));
+      copy.groupId = groups.get(it.groupId);
+    }
+    return copy;
+  });
+}
+
+/** The axis-aligned box an item covers on the canvas, rotation included. */
+function boundsOf(it: CollageItem): { left: number; top: number; right: number; bottom: number } {
+  // Items rotate around their top-left corner (x, y) — Konva's default pivot
+  // with no offset — so the box comes from the rotated corners.
+  const { width: w, height: h } = itemSize(it);
+  const rad = (it.rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const xs = [0, w * cos, -h * sin, w * cos - h * sin];
+  const ys = [0, w * sin, h * cos, w * sin + h * cos];
+  return { left: it.x + Math.min(...xs), top: it.y + Math.min(...ys), right: it.x + Math.max(...xs), bottom: it.y + Math.max(...ys) };
 }
 
 const INITIAL_ITEMS: CollageItem[] = [];
@@ -392,7 +469,9 @@ export const useEditorStore = create<EditorState>()(
   immer((set, get) => ({
     canvas: DEFAULT_CANVAS,
     items: INITIAL_ITEMS,
+    selectedIds: [],
     selectedId: null,
+    multiSelectMode: false,
     croppingId: null,
     cropLocked: false,
     editingId: null,
@@ -442,7 +521,7 @@ export const useEditorStore = create<EditorState>()(
         pushStep(s, prev, label);
         const base = s.items.length;
         images.forEach((img, i) => s.items.push(placeImage(img, s.canvas, base + i)));
-        s.selectedId = s.items[s.items.length - 1]?.id ?? null;
+        setSelection(s, s.items.length ? [s.items[s.items.length - 1].id] : []);
       });
     },
 
@@ -453,7 +532,7 @@ export const useEditorStore = create<EditorState>()(
       set((s) => {
         pushStep(s, prev, label);
         s.items.push(item);
-        s.selectedId = item.id;
+        setSelection(s, [item.id]);
         s.editingId = item.id;
         s.requestedPanel = 'Insert';
       });
@@ -478,7 +557,7 @@ export const useEditorStore = create<EditorState>()(
           rotation: 0,
         };
         s.items.push(item);
-        s.selectedId = id;
+        setSelection(s, [id]);
       });
     },
 
@@ -509,56 +588,52 @@ export const useEditorStore = create<EditorState>()(
     },
 
     removeSelected: () => {
-      const label = 'Delete';
-      const { selectedId } = get();
-      if (!selectedId) return;
+      const ids = new Set(get().selectedIds);
+      if (ids.size === 0) return;
       const prev = snapshot(get());
       set((s) => {
-        pushStep(s, prev, label);
-        s.items = s.items.filter((it) => it.id !== selectedId);
-        s.selectedId = null;
+        pushStep(s, prev, 'Delete');
+        s.items = s.items.filter((it) => !ids.has(it.id));
+        setSelection(s, []);
         s.croppingId = null;
         s.editingId = null;
       });
     },
 
     duplicateSelected: () => {
-      const label = 'Duplicate';
-      const sel = get().items.find((i) => i.id === get().selectedId);
-      if (!sel) return;
+      const sel = selectedItems(get());
+      if (sel.length === 0) return;
+      const copies = copiesOf(sel, PASTE_STEP);
       const prev = snapshot(get());
-      const copy = structuredClone(sel);
-      copy.id = uid(sel.type === 'image' ? 'img' : sel.type === 'text' ? 'txt' : 'stk');
-      copy.x += PASTE_STEP;
-      copy.y += PASTE_STEP;
       set((s) => {
-        pushStep(s, prev, label);
-        s.items.push(copy);
-        s.selectedId = copy.id;
+        pushStep(s, prev, 'Duplicate');
+        s.items.push(...copies);
+        setSelection(s, copies.map((c) => c.id));
         s.croppingId = null;
       });
     },
 
     copySelected: () => {
-      const sel = get().items.find((i) => i.id === get().selectedId);
-      if (!sel) return null;
-      // Committed state is frozen, so the item itself can be kept, not a copy.
-      const clip = { item: sel, text: sel.type === 'text' ? sel.text : '', token: uid('clip'), offset: PASTE_STEP };
+      const sel = selectedItems(get());
+      if (sel.length === 0) return null;
+      // Committed state is frozen, so the items themselves can be kept, not copies.
+      const clip = { items: sel, text: clipboardText(sel), token: uid('clip'), offset: PASTE_STEP };
       set({ itemClipboard: clip });
       return clip;
     },
 
     cutSelected: () => {
-      const sel = get().items.find((i) => i.id === get().selectedId);
-      if (!sel) return null;
-      // Pasted after a cut, it goes back where it was.
-      const clip = { item: sel, text: sel.type === 'text' ? sel.text : '', token: uid('clip'), offset: 0 };
+      const sel = selectedItems(get());
+      if (sel.length === 0) return null;
+      // Pasted after a cut, they go back where they were.
+      const clip = { items: sel, text: clipboardText(sel), token: uid('clip'), offset: 0 };
+      const ids = new Set(sel.map((i) => i.id));
       const prev = snapshot(get());
       set((s) => {
         pushStep(s, prev, 'Cut');
         s.itemClipboard = clip;
-        s.items = s.items.filter((it) => it.id !== sel.id);
-        s.selectedId = null;
+        s.items = s.items.filter((it) => !ids.has(it.id));
+        setSelection(s, []);
         s.croppingId = null;
         s.editingId = null;
       });
@@ -571,22 +646,15 @@ export const useEditorStore = create<EditorState>()(
       // type leaves only the text: still what Copy put there means nothing
       // else was copied since.
       const fromCopy = clip !== null && (token ? token === clip.token : text === '' || text === clip.text);
-      let item: CollageItem;
-      if (fromCopy) {
-        item = structuredClone(clip.item);
-        item.id = uid(item.type === 'image' ? 'img' : item.type === 'text' ? 'txt' : 'stk');
-        item.x += clip.offset;
-        item.y += clip.offset;
-      } else if (text.trim()) {
-        item = newTextItem(get().canvas, text);
-      } else {
-        return false;
-      }
+      let pasted: CollageItem[];
+      if (fromCopy) pasted = copiesOf(clip.items, clip.offset);
+      else if (text.trim()) pasted = [newTextItem(get().canvas, text)];
+      else return false;
       const prev = snapshot(get());
       set((s) => {
         pushStep(s, prev, 'Paste');
-        s.items.push(item);
-        s.selectedId = item.id;
+        s.items.push(...pasted);
+        setSelection(s, pasted.map((i) => i.id));
         s.croppingId = null;
         if (fromCopy && s.itemClipboard) s.itemClipboard.offset += PASTE_STEP;
       });
@@ -727,7 +795,7 @@ export const useEditorStore = create<EditorState>()(
       set((s) => {
         pushStep(s, prev, label);
         s.items = [];
-        s.selectedId = null;
+        setSelection(s, []);
         s.croppingId = null;
         s.editingId = null;
         s.lastLayout = null;
@@ -915,7 +983,7 @@ export const useEditorStore = create<EditorState>()(
 
     startCrop: (id) =>
       set((s) => {
-        s.selectedId = id;
+        setSelection(s, [id]);
         s.croppingId = id;
         const it = s.items.find((i) => i.id === id);
         if (it && it.type === 'image' && !it.crop) {
@@ -974,7 +1042,7 @@ export const useEditorStore = create<EditorState>()(
 
     startEditingText: (id) =>
       set((s) => {
-        s.selectedId = id;
+        setSelection(s, [id]);
         s.editingId = id;
       }),
 
@@ -1004,15 +1072,106 @@ export const useEditorStore = create<EditorState>()(
     select: (id) =>
       set((s) => {
         if (s.editingId && s.editingId !== id) s.editingId = null;
-        s.selectedId = id;
-        const it = id ? s.items.find((i) => i.id === id) : undefined;
+        setSelection(s, id ? withGroup(s.items, id) : []);
+        // Selecting nothing ends a phone's Select more.
+        if (!id) s.multiSelectMode = false;
+        const it = s.selectedId ? s.items.find((i) => i.id === s.selectedId) : undefined;
         if (s.cropLocked && it && it.type === 'image') {
-          s.croppingId = id;
+          s.croppingId = it.id;
           if (!it.crop) it.crop = coverCrop(it.naturalWidth, it.naturalHeight, it.width, it.height);
-        } else if (s.croppingId !== id) {
+        } else if (s.croppingId !== s.selectedId) {
           s.croppingId = null;
         }
       }),
+
+    toggleSelected: (id) =>
+      set((s) => {
+        const group = withGroup(s.items, id);
+        const on = s.selectedIds.includes(id);
+        setSelection(s, on ? s.selectedIds.filter((x) => !group.includes(x)) : [...s.selectedIds, ...group.filter((x) => !s.selectedIds.includes(x))]);
+        s.editingId = null;
+        if (s.croppingId !== s.selectedId) s.croppingId = null;
+      }),
+
+    selectMany: (ids, add = false) =>
+      set((s) => {
+        const next = add ? [...s.selectedIds] : [];
+        for (const id of ids) for (const x of withGroup(s.items, id)) if (!next.includes(x)) next.push(x);
+        setSelection(s, next);
+        s.editingId = null;
+        if (s.croppingId !== s.selectedId) s.croppingId = null;
+      }),
+
+    selectAll: () =>
+      set((s) => {
+        setSelection(s, s.items.map((i) => i.id));
+        s.editingId = null;
+        if (s.croppingId !== s.selectedId) s.croppingId = null;
+      }),
+
+    setMultiSelectMode: (on) => set({ multiSelectMode: on }),
+
+    groupSelected: () => {
+      const ids = new Set(get().selectedIds);
+      if (ids.size < 2) return;
+      const groupId = uid('grp');
+      const prev = snapshot(get());
+      set((s) => {
+        pushStep(s, prev, 'Group');
+        for (const it of s.items) if (ids.has(it.id)) it.groupId = groupId;
+      });
+    },
+
+    ungroupSelected: () => {
+      const ids = new Set(get().selectedIds);
+      if (!get().items.some((i) => ids.has(i.id) && i.groupId)) return;
+      const prev = snapshot(get());
+      set((s) => {
+        pushStep(s, prev, 'Ungroup');
+        for (const it of s.items) if (ids.has(it.id)) delete it.groupId;
+      });
+    },
+
+    distributeSelection: (axis) => {
+      const sel = selectedItems(get());
+      if (sel.length < 3) return;
+      const boxes = sel.map((it) => ({ id: it.id, ...boundsOf(it) }));
+      const [lo, hi] = axis === 'x' ? (['left', 'right'] as const) : (['top', 'bottom'] as const);
+      boxes.sort((a, b) => a[lo] - b[lo]);
+      const span = boxes[boxes.length - 1][hi] - boxes[0][lo];
+      const sizes = boxes.reduce((sum, b) => sum + (b[hi] - b[lo]), 0);
+      const gap = (span - sizes) / (boxes.length - 1);
+      // The two at the ends stay; the rest move to leave equal gaps.
+      const target = new Map<string, number>();
+      let at = boxes[0][lo];
+      for (const b of boxes) {
+        target.set(b.id, at - b[lo]);
+        at += b[hi] - b[lo] + gap;
+      }
+      const prev = snapshot(get());
+      set((s) => {
+        pushStep(s, prev, axis === 'x' ? 'Distribute horizontally' : 'Distribute vertically');
+        for (const it of s.items) {
+          const d = target.get(it.id);
+          if (d) it[axis] += d;
+        }
+      });
+    },
+
+    updateItems: (patches, label) => {
+      if (patches.length === 0) return;
+      const prev = snapshot(get());
+      set((s) => {
+        pushStep(s, prev, label);
+        for (const { id, patch } of patches) {
+          const it = s.items.find((i) => i.id === id);
+          if (!it) continue;
+          // As updateItem: a photo resized by hand leaves the layout.
+          if (it.type === 'image' && (patch.width !== undefined || patch.height !== undefined)) s.lastLayout = null;
+          Object.assign(it, patch as Record<string, unknown>);
+        }
+      });
+    },
 
     setExportScale: (scale) =>
       set((s) => {
@@ -1089,7 +1248,7 @@ export const useEditorStore = create<EditorState>()(
         s.items = state.items;
         s.spacing = state.spacing;
         s.lastLayout = state.lastLayout;
-        s.selectedId = null;
+        setSelection(s, []);
         s.croppingId = null;
         s.editingId = null;
         s.past = [];
@@ -1110,7 +1269,7 @@ export const useEditorStore = create<EditorState>()(
         s.items = [];
         s.spacing = { ...DEFAULT_SPACING };
         s.lastLayout = null;
-        s.selectedId = null;
+        setSelection(s, []);
         s.croppingId = null;
         s.editingId = null;
         s.past = [];
@@ -1216,12 +1375,14 @@ export const useEditorStore = create<EditorState>()(
 
     nudgeSelected: (dx, dy) => {
       const st = get();
-      const id = st.selectedId;
-      if (!id || !st.items.some((i) => i.id === id)) return;
+      const ids = new Set(selectedItems(st).map((i) => i.id));
+      if (ids.size === 0) return;
+      // The same selection keeps extending one step.
+      const id = [...ids].join(',');
       const now = performance.now();
       const move = (s: Draft<EditorState>) => {
-        const it = s.items.find((i) => i.id === id);
-        if (it) {
+        for (const it of s.items) {
+          if (!ids.has(it.id)) continue;
           it.x += dx;
           it.y += dy;
         }
@@ -1251,46 +1412,37 @@ export const useEditorStore = create<EditorState>()(
     },
 
     alignItems: (anchor) => {
-      const selId = get().selectedId;
-      if (!selId) return;
-      const sel = get().items.find((i) => i.id === selId);
-      if (!sel) return;
-      const { width: cw, height: ch } = get().canvas;
-      const label = `Align ${anchor}`;
+      const sel = selectedItems(get());
+      if (sel.length === 0) return;
+      // The drawn box (a text box is as tall as all its wrapped lines; a
+      // rotated item covers its rotated corners).
+      const boxes = new Map(sel.map((it) => [it.id, boundsOf(it)]));
+      const all = [...boxes.values()];
+      // One item lines up with the canvas; several with each other, inside
+      // the box round them all.
+      const frame =
+        sel.length === 1
+          ? { left: 0, top: 0, right: get().canvas.width, bottom: get().canvas.height }
+          : {
+              left: Math.min(...all.map((b) => b.left)),
+              top: Math.min(...all.map((b) => b.top)),
+              right: Math.max(...all.map((b) => b.right)),
+              bottom: Math.max(...all.map((b) => b.bottom)),
+            };
       const prev = snapshot(get());
       set((s) => {
-        pushStep(s, prev, label);
-        const it = s.items.find((i) => i.id === selId);
-        if (!it) return;
-        // Real drawn size — a text box is as tall as all its wrapped lines, not
-        // one line (the old fontSize × 1.3 put multi-line text off-canvas).
-        const { width: iw, height: ih } = itemSize(it);
-
-        // Items rotate around their top-left corner (item.x, item.y) — Konva's
-        // default pivot when no offsetX/offsetY is set (see ImageNode/StickerNode/
-        // TextNode). So the visual bounding box after rotation is not simply
-        // [x, x+iw] x [y, y+ih]; it has to be derived from the rotated corners.
-        const rad = (it.rotation * Math.PI) / 180;
-        const cos = Math.cos(rad);
-        const sin = Math.sin(rad);
-        const corners = [
-          { x: 0, y: 0 },
-          { x: iw, y: 0 },
-          { x: 0, y: ih },
-          { x: iw, y: ih },
-        ].map((p) => ({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos }));
-        const minX = Math.min(...corners.map((p) => p.x));
-        const maxX = Math.max(...corners.map((p) => p.x));
-        const minY = Math.min(...corners.map((p) => p.y));
-        const maxY = Math.max(...corners.map((p) => p.y));
-
-        switch (anchor) {
-          case 'left':      it.x = -minX; break;
-          case 'center-x':  it.x = cw / 2 - (minX + maxX) / 2; break;
-          case 'right':     it.x = cw - maxX; break;
-          case 'top':       it.y = -minY; break;
-          case 'center-y':  it.y = ch / 2 - (minY + maxY) / 2; break;
-          case 'bottom':    it.y = ch - maxY; break;
+        pushStep(s, prev, `Align ${anchor}`);
+        for (const it of s.items) {
+          const b = boxes.get(it.id);
+          if (!b) continue;
+          switch (anchor) {
+            case 'left':      it.x += frame.left - b.left; break;
+            case 'center-x':  it.x += (frame.left + frame.right) / 2 - (b.left + b.right) / 2; break;
+            case 'right':     it.x += frame.right - b.right; break;
+            case 'top':       it.y += frame.top - b.top; break;
+            case 'center-y':  it.y += (frame.top + frame.bottom) / 2 - (b.top + b.bottom) / 2; break;
+            case 'bottom':    it.y += frame.bottom - b.bottom; break;
+          }
         }
       });
     },
@@ -1343,7 +1495,7 @@ useEditorStore.subscribe((s, prev) => {
     s.past !== prev.past ||
     s.future !== prev.future ||
     (prev._pending !== null && s._pending === null) ||
-    s.itemClipboard?.item !== prev.itemClipboard?.item;
+    s.itemClipboard?.items !== prev.itemClipboard?.items;
   if (!historyChanged) return;
 
   const reachable = new Set<string>();
@@ -1352,7 +1504,7 @@ useEditorStore.subscribe((s, prev) => {
   for (const snap of s.future) collectBlobUrls(reachable, snap.items, snap.canvas);
   if (s._pending) collectBlobUrls(reachable, s._pending.snap.items, s._pending.snap.canvas);
   // A copied photo must still paste after everything else showing it is gone.
-  if (s.itemClipboard) collectBlobUrls(reachable, [s.itemClipboard.item]);
+  if (s.itemClipboard) collectBlobUrls(reachable, s.itemClipboard.items);
 
   for (const url of trackedBlobUrls) {
     if (!reachable.has(url)) {

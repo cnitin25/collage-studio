@@ -206,6 +206,7 @@ const BASE: Readers<Omit<BaseItem, 'id' | 'type'>> = {
   cornerRadius: nonNeg,
   borderColor: str,
   borderWidth: nonNeg,
+  groupId: str,
 };
 
 const FILTERS: Readers<ImageFilters> = {

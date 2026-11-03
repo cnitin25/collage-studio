@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../store/useEditorStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useReplacePhoto } from '../hooks/useReplacePhoto';
-import { isMac } from '../utils/platform';
-import Icon, { type IconName } from './ui/Icon';
+import { MOD } from '../utils/platform';
+import Icon from './ui/Icon';
+import ToolButton from './ui/ToolButton';
 
 interface Props {
   onAddImages: () => void;
@@ -15,38 +16,6 @@ interface Props {
   onToggleAutoSave: () => void;
   toolsOpen: boolean;
   onToggleTools: () => void;
-}
-
-const MOD = isMac() ? '⌘' : 'Ctrl+';
-
-type ToolButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  icon: IconName;
-  /** Accessible name; also the tooltip unless `tip` says more. */
-  label: string;
-  tip?: string;
-  /** Anchor the tooltip to the button's right / left edge, for buttons near
-   *  the window's right / left edge. */
-  tipEnd?: boolean;
-  tipStart?: boolean;
-};
-
-/**
- * Icon-only toolbar button. The name lives in aria-label; sighted mouse users
- * get it from the CSS tooltip (`data-tip`, see index.css), which replaces the
- * slower native `title` tooltip — so no `title` here, or both would show.
- */
-function ToolButton({ icon, label, tip, tipEnd, tipStart, className = '', ...rest }: ToolButtonProps) {
-  return (
-    <button
-      className={`btn icon-btn ${className}`}
-      aria-label={label}
-      data-tip={tip ?? label}
-      data-tip-align={tipEnd ? 'end' : tipStart ? 'start' : undefined}
-      {...rest}
-    >
-      <Icon name={icon} />
-    </button>
-  );
 }
 
 export default function Toolbar({
@@ -66,7 +35,7 @@ export default function Toolbar({
   const canRedo = useEditorStore((s) => s.future.length > 0);
   const removeSelected = useEditorStore((s) => s.removeSelected);
   const duplicateSelected = useEditorStore((s) => s.duplicateSelected);
-  const selectedId = useEditorStore((s) => s.selectedId);
+  const hasSelection = useEditorStore((s) => s.selectedIds.length > 0);
   const itemCount = useEditorStore((s) => s.items.length);
   const projectName = useEditorStore((s) => s.projectName);
   const setProjectName = useEditorStore((s) => s.setProjectName);
@@ -165,7 +134,7 @@ export default function Toolbar({
             label="Duplicate"
             tip={`Duplicate (${MOD}D)`}
             onClick={duplicateSelected}
-            disabled={!selectedId}
+            disabled={!hasSelection}
           />
           <ToolButton
             className="toolbar-mid-hide"
@@ -173,7 +142,7 @@ export default function Toolbar({
             label="Delete"
             tip="Delete (Del)"
             onClick={removeSelected}
-            disabled={!selectedId}
+            disabled={!hasSelection}
           />
           <ToolButton
             className="toolbar-mid-hide"
@@ -256,7 +225,7 @@ export default function Toolbar({
               <button
                 className="overflow-item"
                 role="menuitem"
-                disabled={!selectedId}
+                disabled={!hasSelection}
                 onClick={() => runFromMenu(duplicateSelected)}
               >
                 <Icon name="copy" /> Duplicate
@@ -264,7 +233,7 @@ export default function Toolbar({
               <button
                 className="overflow-item"
                 role="menuitem"
-                disabled={!selectedId}
+                disabled={!hasSelection}
                 onClick={() => runFromMenu(removeSelected)}
               >
                 <Icon name="trash" /> Delete

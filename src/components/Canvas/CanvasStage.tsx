@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Stage, Layer, Group, Line, Shape, Transformer } from 'react-konva';
+import { Stage, Layer, Group, Line, Rect, Shape, Transformer } from 'react-konva';
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useEditorStore } from '../../store/useEditorStore';
@@ -14,6 +14,7 @@ import ImageNode from './ImageNode';
 import TextNode from './TextNode';
 import StickerNode from './StickerNode';
 import Background from './Background';
+import SelectionActions from './SelectionActions';
 import { drawShapePath } from '../../utils/shapes';
 import type { CollageItem } from '../../types';
 import { computeSnap, collectSnapTargets, nearestSnapTarget, type Box, type Guide } from '../../utils/snap';
@@ -99,10 +100,21 @@ function itemBox(it: CollageItem): Box {
   return { x: it.x, y: it.y, ...itemSize(it) };
 }
 
+/** An item's size, scaled: a text box by its font as well as its width, so it doesn't rewrap. */
+function scaledBy(it: CollageItem, s: number): Partial<CollageItem> {
+  if (it.type === 'image') return { width: it.width * s, height: it.height * s };
+  if (it.type === 'text') return { width: it.width * s, fontSize: it.fontSize * s };
+  const size = it.fontSize * s;
+  return { fontSize: size, width: size, height: size };
+}
+
 const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
   const canvas = useEditorStore((s) => s.canvas);
   const items = useEditorStore((s) => s.items);
   const selectedId = useEditorStore((s) => s.selectedId);
+  const selectedIds = useEditorStore((s) => s.selectedIds);
+  // Several items selected: they move, resize and rotate as one.
+  const multi = selectedIds.length > 1;
   const croppingId = useEditorStore((s) => s.croppingId);
   const editingId = useEditorStore((s) => s.editingId);
   const layoutLocked = useEditorStore((s) => s.layoutLocked);
@@ -114,6 +126,9 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
   const viewY = useEditorStore((s) => s.viewY);
   const setView = useEditorStore((s) => s.setView);
   const select = useEditorStore((s) => s.select);
+  const toggleSelected = useEditorStore((s) => s.toggleSelected);
+  const selectMany = useEditorStore((s) => s.selectMany);
+  const updateItems = useEditorStore((s) => s.updateItems);
   const updateItem = useEditorStore((s) => s.updateItem);
   const updateItemLive = useEditorStore((s) => s.updateItemLive);
   const beginChange = useEditorStore((s) => s.beginChange);
@@ -297,9 +312,38 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
   // Konva reports the end of a pinch as a tap on whatever is under the
   // fingers, which would select it; ignore taps during and just after one.
   const suppressTapUntil = useRef(0);
-  const selectFromCanvas = (id: string) => {
+  const selectFromCanvas = (id: string, evt?: Event) => {
     if (gesture.current || performance.now() < suppressTapUntil.current) return;
-    select(id);
+    // Shift, Ctrl or ⌘ — or Select more, on a phone — adds to the selection.
+    const adding =
+      (evt instanceof MouseEvent && (evt.shiftKey || evt.ctrlKey || evt.metaKey)) ||
+      useEditorStore.getState().multiSelectMode;
+    if (adding) toggleSelected(id);
+    else select(id);
+  };
+
+  // A box dragged across empty canvas (mouse only) selects what it touches.
+  // In canvas coordinates; `add` keeps what was already selected (Shift).
+  const marquee = useRef<{ x0: number; y0: number; add: boolean } | null>(null);
+  const [marqueeBox, setMarqueeBox] = useState<Box | null>(null);
+  const finishMarquee = () => {
+    const m = marquee.current;
+    const stage = stageRef.current;
+    marquee.current = null;
+    setMarqueeBox(null);
+    const p = stage?.getRelativePointerPosition();
+    if (!m || !stage || !p) return;
+    const box = { x: Math.min(m.x0, p.x), y: Math.min(m.y0, p.y), width: Math.abs(p.x - m.x0), height: Math.abs(p.y - m.y0) };
+    // Less than a few screen px is a click, already handled on press.
+    if (Math.max(box.width, box.height) * display.scale * viewScale < 4) return;
+    const hits = stage
+      .find('.item')
+      .filter((n) => {
+        const r = n.getClientRect({ relativeTo: stage });
+        return r.x < box.x + box.width && r.x + r.width > box.x && r.y < box.y + box.height && r.y + r.height > box.y;
+      })
+      .map((n) => n.id());
+    if (hits.length) selectMany(hits, m.add);
   };
 
   // Pinch listeners live on .canvas-area rather than the Konva stage, so a
@@ -420,11 +464,22 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     if (croppingId) return;
     const target = e.target;
     const clickedEmpty = target === target.getStage() || target.name() === 'background';
-    if (clickedEmpty) select(null);
+    if (!clickedEmpty) return;
+    const evt = e.evt;
+    const add = evt instanceof MouseEvent && (evt.shiftKey || evt.ctrlKey || evt.metaKey);
+    if (!add) select(null);
+    const p = evt instanceof MouseEvent ? stageRef.current?.getRelativePointerPosition() : null;
+    if (p && !layoutLocked) marquee.current = { x0: p.x, y0: p.y, add };
   };
 
   const handleStageMM = () => {
     if (gesture.current) return;
+    const m = marquee.current;
+    if (m) {
+      const p = stageRef.current?.getRelativePointerPosition();
+      if (p) setMarqueeBox({ x: Math.min(m.x0, p.x), y: Math.min(m.y0, p.y), width: Math.abs(p.x - m.x0), height: Math.abs(p.y - m.y0) });
+      return;
+    }
     if (!isPanning.current || !panStart.current) return;
     const stage = stageRef.current;
     const p = stage?.getPointerPosition();
@@ -436,6 +491,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
 
   const handleStageMU = () => {
     if (gesture.current) return;
+    if (marquee.current) finishMarquee();
     if (isPanning.current) {
       isPanning.current = false;
       panStart.current = null;
@@ -457,23 +513,60 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     const tr = trRef.current;
     const stage = stageRef.current;
     if (!tr || !stage) return;
-    if (!selectedId || editingId || layoutLocked) {
+    if (selectedIds.length === 0 || editingId || layoutLocked) {
       tr.nodes([]);
       tr.getLayer()?.batchDraw();
       return;
     }
-    const node = stage.findOne<Konva.Node>(`#${selectedId}`);
-    tr.nodes(node ? [node] : []);
+    tr.nodes(selectedIds.map((id) => stage.findOne<Konva.Node>(`#${id}`)).filter((n): n is Konva.Node => !!n));
     placeRotateHandle(tr, stage, coarsePointer ? 44 : 28);
     tr.getLayer()?.batchDraw();
     // The view and the stage's size move the handle on screen too.
-  }, [selectedId, editingId, layoutLocked, items, viewScale, viewX, viewY, display.scale, coarsePointer]);
+  }, [selectedIds, editingId, layoutLocked, items, viewScale, viewX, viewY, display.scale, coarsePointer]);
+
+  // A box drag can end outside the stage, where the stage hears no mouseup.
+  useEffect(() => {
+    const onUp = () => {
+      if (marquee.current) finishMarquee();
+    };
+    window.addEventListener('mouseup', onUp);
+    return () => window.removeEventListener('mouseup', onUp);
+  });
 
   const isCroppingSelected = !!croppingId && croppingId === selectedId;
+
+  // Several items resized or rotated together: write each back, as one undo
+  // step. (A lone item handles its own transform end — see ImageNode.)
+  const finishMultiTransform = () => {
+    const tr = trRef.current;
+    if (!multi || !tr) return;
+    const patches = tr.nodes().flatMap((node) => {
+      const it = items.find((i) => i.id === node.id());
+      if (!it) return [];
+      const s = node.scaleX(); // ratio kept: one scale for both axes
+      node.scale({ x: 1, y: 1 });
+      const patch: Partial<CollageItem> = Object.assign(
+        { x: node.x(), y: node.y(), rotation: node.rotation() },
+        Math.abs(s - 1) > 1e-6 ? scaledBy(it, s) : {},
+      );
+      return [{ id: it.id, patch }];
+    });
+    updateItems(patches, 'Transform');
+  };
+
+  // A selection of several moves together (the Transformer drags every node
+  // it holds). Each node reports its own dragend; the first writes them all,
+  // as one undo step, and the rest find nothing left to do.
+  const multiDrag = useRef(false);
 
   const handleNodeDragMove = (id: string, node: Konva.Node) => {
     const item = items.find((i) => i.id === id);
     if (!item) return;
+    if (multi && selectedIds.includes(id)) {
+      // Snapping and swapping are for one item; together, they just move.
+      multiDrag.current = true;
+      return;
+    }
     const box = itemBox(item);
     box.x = node.x();
     box.y = node.y();
@@ -508,6 +601,13 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
 
   const handleNodeDragEnd = (id: string, node: Konva.Node) => {
     setGuides([]);
+    if (multi && selectedIds.includes(id)) {
+      if (!multiDrag.current) return;
+      multiDrag.current = false;
+      const nodes = trRef.current?.nodes() ?? [node];
+      updateItems(nodes.map((n) => ({ id: n.id(), patch: { x: n.x(), y: n.y() } })), 'Move');
+      return;
+    }
     const item = items.find((i) => i.id === id);
     if (swapModeEnabled && item?.type === 'image' && dropTargetId && dropTargetId !== id) {
       swapItems(id, dropTargetId);
@@ -569,7 +669,8 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                     // node stays visible, updating live (TextEditOverlay).
                     isEditing={editingId === item.id && !coarsePointer}
                     locked={layoutLocked}
-                    onSelect={() => selectFromCanvas(item.id)}
+                    onSelect={(e) => selectFromCanvas(item.id, e?.evt)}
+                    inSelection={multi && selectedIds.includes(item.id)}
                     onChange={(patch) => updateItem(item.id, patch)}
                     onStartEdit={() => startEditingText(item.id)}
                     onNodeDragMove={handleNodeDragMove}
@@ -583,7 +684,8 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                     key={item.id}
                     item={item}
                     locked={layoutLocked}
-                    onSelect={() => selectFromCanvas(item.id)}
+                    onSelect={(e) => selectFromCanvas(item.id, e?.evt)}
+                    inSelection={multi && selectedIds.includes(item.id)}
                     onChange={(patch) => updateItem(item.id, patch)}
                     onNodeDragMove={handleNodeDragMove}
                     onNodeDragEnd={handleNodeDragEnd}
@@ -602,7 +704,8 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
                   isCropping={croppingId === item.id}
                   isDropTarget={dropTargetId === item.id}
                   locked={layoutLocked}
-                  onSelect={() => selectFromCanvas(item.id)}
+                  onSelect={(e) => selectFromCanvas(item.id, e?.evt)}
+                    inSelection={multi && selectedIds.includes(item.id)}
                   onChange={(patch) => updateItem(item.id, patch)}
                   onNodeDragMove={handleNodeDragMove}
                   onNodeDragEnd={handleNodeDragEnd}
@@ -681,10 +784,23 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
             rotateEnabled={!isCroppingSelected}
             rotationSnaps={ROTATION_SNAPS}
             rotationSnapTolerance={4}
-            keepRatio={lockRatio}
+            // Several items scale together from the corners, keeping their shapes.
+            keepRatio={multi || lockRatio}
             enabledAnchors={
-              isCroppingSelected ? [] : isTextSelected ? TEXT_ANCHORS : lockRatio ? CORNER_ANCHORS : ALL_ANCHORS
+              isCroppingSelected
+                ? []
+                : multi
+                  ? CORNER_ANCHORS
+                  : isTextSelected
+                    ? TEXT_ANCHORS
+                    : lockRatio
+                      ? CORNER_ANCHORS
+                      : ALL_ANCHORS
             }
+            onTransformEnd={() => {
+              setGuides([]);
+              finishMultiTransform();
+            }}
             anchorStroke="#ff7a59"
             anchorFill="#ffffff"
             // Touch: small round handles set just outside the box (padding),
@@ -779,10 +895,21 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
               if (outWidth < 24 || (!isTextSelected && outHeight < 24)) return oldBox;
               return { ...newBox, x: outX, y: outY, width: outWidth, height: outHeight };
             }}
-            onTransformEnd={() => setGuides([])}
           />
+          {marqueeBox && (
+            <Rect
+              {...marqueeBox}
+              name={UI_OVERLAY}
+              listening={false}
+              fill="rgba(255, 122, 89, 0.08)"
+              stroke="#ff7a59"
+              strokeWidth={1 / (scale * viewScale)}
+              dash={[4 / (scale * viewScale), 4 / (scale * viewScale)]}
+            />
+          )}
         </Layer>
       </Stage>
+      <SelectionActions transformerRef={trRef} />
     </div>
   );
 });

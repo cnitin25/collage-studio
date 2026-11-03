@@ -37,6 +37,19 @@ const PATHS = {
   collapse: 'M6 9l6 6 6-6',
   cloudCheck: 'M6.5 18h11a3.5 3.5 0 0 0 0-7 5.5 5.5 0 0 0-10.9.5A3.25 3.25 0 0 0 6.5 18zM9.5 14.5l2 2 3.5-4',
   cloudOff: 'M6.5 18h11a3.5 3.5 0 0 0 0-7 5.5 5.5 0 0 0-10.9.5A3.25 3.25 0 0 0 6.5 18zM4 4l16 16',
+  // Selections: group (two items in a dashed frame), ungroup, add to selection.
+  group: 'M8 8h4v4H8zM13 13h3v3h-3zM3 6V3h3M18 3h3v3M21 18v3h-3M6 21H3v-3',
+  ungroup: 'M4 4h6v6H4zM14 14h6v6h-6zM14 4h6v6h-6',
+  selectMore: 'M4 3l11 5.5-4.5 1.5L9 14.5zM17 13v8M13 17h8',
+  // Align: a guide line and two bars against it.
+  alignLeft: 'M4 3v18M8 7h12v4H8zM8 14h7v4H8z',
+  alignCenterX: 'M12 3v18M6 7h12v4H6zM8.5 14h7v4h-7z',
+  alignRight: 'M20 3v18M4 7h12v4H4zM9 14h7v4H9z',
+  alignTop: 'M3 4h18M7 8h4v12H7zM14 8h4v7h-4z',
+  alignCenterY: 'M3 12h18M7 6h4v12H7zM14 8.5h4v7h-4z',
+  alignBottom: 'M3 20h18M7 4h4v12H7zM14 9h4v7h-4z',
+  distributeX: 'M4 3v18M20 3v18M10 7h4v10h-4z',
+  distributeY: 'M3 4h18M3 20h18M7 10h10v4H7z',
 } as const;
 
 export type IconName = keyof typeof PATHS;

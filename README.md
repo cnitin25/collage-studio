@@ -188,9 +188,29 @@ never leave your device.
   without changing it records nothing. Editor shortcuts are off while the
   Projects dialog is open — Escape closes it, and keyboard focus stays
   inside it.
-- **Copy, cut and paste.** Ctrl/⌘+C, X and V copy, cut and paste the selected
-  item; each paste lands a step further from the original, and a cut item
-  pastes back where it was. Copying a text item puts its text on the system
+- **Several items at once.** Shift-click (or Ctrl/⌘-click) adds an item to
+  the selection or takes it out, dragging across empty canvas selects
+  everything the box touches, and Ctrl/⌘+A selects all; on a phone, **Select
+  more** in the bottom bar makes taps add to the selection. A selection of
+  several moves, resizes and rotates as one (text scales its font, so it
+  doesn't rewrap) and can be deleted, duplicated, nudged, copied and pasted —
+  each as one undo step.
+  - **Groups**: Ctrl/⌘+G groups the selection and Ctrl/⌘+Shift+G ungroups
+    it. One click on a member selects the whole group; groups are saved with
+    the project (and in portable files), and copies of a group form a group
+    of their own.
+  - **Align and distribute**: one item lines up with the canvas; several line
+    up with each other (by their drawn edges, rotation included), and three
+    or more can be spaced evenly across or down.
+  - A **floating bar** above a selection of several (desktop) holds Group,
+    the six alignments, Distribute, Duplicate and Delete; it gets out of the
+    way while the selection is being dragged or resized. Phones get the same
+    actions in the bottom bar.
+  - Panels for a single item (crop, adjust, border, text effects) step aside
+    while several are selected.
+- **Copy, cut and paste.** Ctrl/⌘+C, X and V copy, cut and paste the
+  selection; each paste lands a step further from the original, and cut items
+  paste back where they were. Copying a text item puts its text on the system
   clipboard too. Pasting what another app copied works as well: an image (a
   screenshot, a photo copied from a browser) is added as a photo, and text
   becomes a text box. A copied item can be pasted into another project, and
@@ -202,9 +222,12 @@ never leave your device.
   |---|---|
   | Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y | Undo, redo |
   | Ctrl+C, Ctrl+X, Ctrl+V | Copy, cut, paste |
+  | Shift-click or Ctrl-click | Add to or take from the selection |
+  | Ctrl+A | Select everything |
+  | Ctrl+G, Ctrl+Shift+G | Group, ungroup |
   | Ctrl+D | Duplicate |
-  | Delete or Backspace | Delete the selected item |
-  | Arrow keys (Shift: 10 px) | Nudge the selected item |
+  | Delete or Backspace | Delete the selection |
+  | Arrow keys (Shift: 10 px) | Nudge the selection |
   | Ctrl+] and Ctrl+[ (with Shift: to the top or bottom) | Bring forward, send backward |
   | Ctrl+S | Save |
   | Ctrl+Shift+E | Export the image |
@@ -302,12 +325,14 @@ src/                      unit tests sit next to the code they cover
     Toolbar.tsx             top bar — auto-save toggle, undo/redo, save/export,
                              theme toggle; collapses secondary actions into an
                              overflow menu on the phone layout
-    SelectionBar.tsx        phone-only actions for the selected item
-    ui/Icon.tsx             inline SVG icons (used on the phone layout)
+    SelectionBar.tsx        phone-only actions for the selection, Select more
+    ui/Icon.tsx             inline SVG icons
+    ui/ToolButton.tsx       icon button with a tooltip (toolbar, selection bar)
     App.tsx                 dropzone, keyboard shortcuts, export/save wiring
     ErrorBoundary.tsx        catches render crashes, saves a recovery copy of
                              unsaved work, offers a safe reload
-    Canvas/                  Konva stage and per-item node renderers
+    Canvas/                  Konva stage and per-item node renderers;
+                             SelectionActions.tsx is the floating bar
     panels/                  right-hand inspector — one collapsible panel per
                              feature area (a bottom sheet, or a side panel in
                              landscape, on the phone layout)
@@ -360,6 +385,10 @@ e2e/                        standalone Playwright project (its own
                              progress, warmth, fonts, crash recovery
     shortcuts.spec.ts        copy/cut/paste, images and text pasted from other
                              apps, fields left alone, Save/Export/layer keys
+    multi-select.spec.ts     Shift-click, box and Ctrl+A selection; moving,
+                             resizing, deleting, duplicating, nudging, copying
+                             several; saved groups; align/distribute; the
+                             floating bar; Select more on a phone
     text-style.spec.ts       outline, shadow (under the outline), highlight box,
                              letter/line spacing, text and sticker opacity
     helpers.ts               store access, generated test images, image metrics,
@@ -403,8 +432,8 @@ e2e/                        standalone Playwright project (its own
   off, and a photo zoomed so far that its centre is off the side of the
   stage keeps its rotate handle off it too: zoom out, or use the 90° rotate
   buttons.
-- One item is selected at a time: no multi-select, grouping, or aligning
-  items to each other.
+- Groups are flat — a group can't contain another group — and a layout
+  arranges grouped photos like any others (the group stays a group).
 
 ## Licence
 

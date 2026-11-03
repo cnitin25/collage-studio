@@ -23,6 +23,15 @@ interface Action {
  */
 export default function SelectionBar({ onOpenPanel }: Props) {
   const selected = useEditorStore((s) => s.items.find((i) => i.id === s.selectedId));
+  const count = useEditorStore((s) => s.selectedIds.length);
+  const grouped = useEditorStore((s) => {
+    const sel = s.items.filter((i) => s.selectedIds.includes(i.id));
+    return sel.length > 1 && !!sel[0].groupId && sel.every((i) => i.groupId === sel[0].groupId);
+  });
+  const multiSelectMode = useEditorStore((s) => s.multiSelectMode);
+  const setMultiSelectMode = useEditorStore((s) => s.setMultiSelectMode);
+  const groupSelected = useEditorStore((s) => s.groupSelected);
+  const ungroupSelected = useEditorStore((s) => s.ungroupSelected);
   const croppingId = useEditorStore((s) => s.croppingId);
   const startCrop = useEditorStore((s) => s.startCrop);
   const endCrop = useEditorStore((s) => s.endCrop);
@@ -32,15 +41,33 @@ export default function SelectionBar({ onOpenPanel }: Props) {
   const select = useEditorStore((s) => s.select);
   const replace = useReplacePhoto();
 
-  if (!selected) return null;
-  const cropping = croppingId === selected.id;
+  if (count === 0) return null;
+  const cropping = !!selected && croppingId === selected.id;
 
+  // Phones have no Shift: while this is on, taps add to the selection.
+  const more: Action = {
+    key: 'more',
+    icon: 'selectMore',
+    label: 'Select more',
+    run: () => setMultiSelectMode(!multiSelectMode),
+    active: multiSelectMode,
+  };
   const common: Action[] = [
+    more,
     { key: 'dup', icon: 'copy', label: 'Duplicate', run: duplicateSelected },
     { key: 'del', icon: 'trash', label: 'Delete', run: removeSelected, danger: true },
   ];
   let actions: Action[];
-  if (selected.type === 'image') {
+  if (!selected) {
+    // Several selected: what applies to them together.
+    actions = [
+      grouped
+        ? { key: 'ungroup', icon: 'ungroup', label: 'Ungroup', run: ungroupSelected }
+        : { key: 'group', icon: 'group', label: 'Group', run: groupSelected },
+      { key: 'align', icon: 'alignLeft', label: 'Align', run: () => onOpenPanel('Photo Alignment') },
+      ...common,
+    ];
+  } else if (selected.type === 'image') {
     actions = [
       {
         key: 'crop',

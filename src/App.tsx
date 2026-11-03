@@ -84,7 +84,7 @@ export default function App() {
   const clearAll = useEditorStore((s) => s.clearAll);
   const requestPanel = useEditorStore((s) => s.requestPanel);
   const resetView = useEditorStore((s) => s.resetView);
-  const hasSelection = useEditorStore((s) => s.selectedId !== null);
+  const hasSelection = useEditorStore((s) => s.selectedIds.length > 0);
   const zoomed = useEditorStore((s) => s.viewScale !== 1 || s.viewX !== 0 || s.viewY !== 0);
   const zoomPercent = useEditorStore((s) => Math.round(s.viewScale * 100));
   const compact = useMediaQuery(COMPACT_QUERY);
@@ -342,6 +342,18 @@ export default function App() {
       }
       const target = e.target as HTMLElement;
       if (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable) return;
+      if (mod && key === 'a') {
+        e.preventDefault();
+        useEditorStore.getState().selectAll();
+        return;
+      }
+      if (mod && key === 'g') {
+        e.preventDefault();
+        const st = useEditorStore.getState();
+        if (e.shiftKey) st.ungroupSelected();
+        else st.groupSelected();
+        return;
+      }
       // Brackets: one layer up or down; with Shift (which types {}), to the top or bottom.
       const up = e.key === ']' || e.key === '}';
       const down = e.key === '[' || e.key === '{';
@@ -369,7 +381,7 @@ export default function App() {
         else select(null);
       } else if (e.key.startsWith('Arrow')) {
         const st = useEditorStore.getState();
-        if (!st.selectedId || st.layoutLocked || st.croppingId || st.editingId) return;
+        if (st.selectedIds.length === 0 || st.layoutLocked || st.croppingId || st.editingId) return;
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
         const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;

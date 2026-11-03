@@ -15,7 +15,9 @@ interface Props {
   isCropping: boolean;
   isDropTarget: boolean;
   locked: boolean;
-  onSelect: () => void;
+  onSelect: (e?: KonvaEventObject<Event>) => void;
+  /** One of several selected items: the selection is transformed as a whole (CanvasStage). */
+  inSelection: boolean;
   onChange: (patch: Partial<ImageItem>) => void; // committed (history)
   onNodeDragMove: (id: string, node: Konva.Node) => void;
   onNodeDragEnd: (id: string, node: Konva.Node) => void;
@@ -85,6 +87,7 @@ function GlyphBorder({
 
 export default function ImageNode({
   item,
+  inSelection,
   isCropping,
   isDropTarget,
   locked,
@@ -219,6 +222,7 @@ export default function ImageNode({
   // crop of that aspect, scaled, comes out undistorted), and counter-scale the
   // border so its width stays even. handleTransformEnd bakes in the same crop.
   const handleTransform = () => {
+    if (inSelection) return;
     const g = groupRef.current;
     const img = imgRef.current;
     if (!g || !img) return;
@@ -233,6 +237,7 @@ export default function ImageNode({
   };
 
   const handleTransformEnd = () => {
+    if (inSelection) return;
     const g = groupRef.current;
     if (!g) return;
     const sx = g.scaleX();

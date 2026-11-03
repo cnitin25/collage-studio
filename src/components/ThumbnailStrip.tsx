@@ -14,7 +14,7 @@ interface Props {
 
 export default function ThumbnailStrip({ keepSlot = false }: Props) {
   const items = useEditorStore((s) => s.items);
-  const selectedId = useEditorStore((s) => s.selectedId);
+  const selectedIds = useEditorStore((s) => s.selectedIds);
   const select = useEditorStore((s) => s.select);
 
   const photos = items.filter((it): it is ImageItem => it.type === 'image');
@@ -36,12 +36,12 @@ export default function ThumbnailStrip({ keepSlot = false }: Props) {
       {photos.map((ph) => (
         <button
           key={ph.id}
-          className={`thumb-item ${selectedId === ph.id ? 'is-active' : ''}`}
+          className={`thumb-item ${selectedIds.includes(ph.id) ? 'is-active' : ''}`}
           onClick={() => select(ph.id)}
           title="Click to select"
         >
           <img src={ph.src} alt="" className="thumb-img" draggable={false} />
-          {selectedId === ph.id && <span className="thumb-sel-mark" />}
+          {selectedIds.includes(ph.id) && <span className="thumb-sel-mark" />}
         </button>
       ))}
       <button className="thumb-add" onClick={handleAddMore} title="Add more photos">

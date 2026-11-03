@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { Shape, Text as KonvaText } from 'react-konva';
 import type Konva from 'konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
 import { DEFAULT_LINE_HEIGHT, type TextItem } from '../../types';
 import { drawShapePath } from '../../utils/shapes';
 
@@ -8,7 +9,9 @@ interface Props {
   item: TextItem;
   isEditing: boolean;
   locked: boolean;
-  onSelect: () => void;
+  onSelect: (e?: KonvaEventObject<Event>) => void;
+  /** One of several selected items: the selection is transformed as a whole (CanvasStage). */
+  inSelection: boolean;
   onChange: (patch: Partial<TextItem>) => void;
   onStartEdit: () => void;
   onNodeDragMove: (id: string, node: Konva.Node) => void;
@@ -17,6 +20,7 @@ interface Props {
 
 export default function TextNode({
   item,
+  inSelection,
   isEditing,
   locked,
   onSelect,
@@ -102,12 +106,12 @@ export default function TextNode({
         // stretched until release, then jumped to the new wrapping.
         onTransform={() => {
           const node = ref.current;
-          if (!node) return;
+          if (!node || inSelection) return;
           node.setAttrs({ width: Math.max(20, node.width() * node.scaleX()), scaleX: 1, scaleY: 1 });
         }}
         onTransformEnd={() => {
           const node = ref.current;
-          if (!node) return;
+          if (!node || inSelection) return;
           const sx = node.scaleX();
           node.scaleX(1);
           node.scaleY(1);
