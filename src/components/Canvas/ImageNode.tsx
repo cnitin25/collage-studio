@@ -340,10 +340,9 @@ export default function ImageNode({
           saturation={(f.saturation ?? 0) / 50}
           hue={-(f.hue ?? 0)}
           enhance={(f.enhance ?? 0) / 100}
-          // Konva blurs raw cache pixels, and the cache is made at the screen's
-          // pixel ratio — scale so the blur is the same in canvas px on every
-          // screen and in exports (CanvasStage re-scales it for 2x/3x export).
-          blurRadius={(f.blur ?? 0) * Konva.pixelRatio}
+          // In canvas px: Konva scales it to the cache's pixel ratio itself, so
+          // it's the same on every screen and in 2x/3x exports.
+          blurRadius={f.blur ?? 0}
           draggable={isCropping}
           dragBoundFunc={() =>
             lockedAbs.current ?? imgRef.current?.getAbsolutePosition() ?? { x: 0, y: 0 }

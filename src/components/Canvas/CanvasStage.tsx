@@ -165,19 +165,14 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
     // Filtered images (and a blurred background) draw from a Konva cache
     // made at the screen's pixel ratio. A 2x/3x export would upscale that
     // cache and come out soft, so re-cache at export resolution for the
-    // capture and restore afterwards. Blur runs on raw cache pixels, so its
-    // radius has to scale with the cache too (ImageNode/Background set it
-    // as canvas px × Konva.pixelRatio for the on-screen cache).
+    // capture and restore afterwards. Blur needs nothing extra: Konva applies
+    // blurRadius in the node's own units, whatever the cache's pixel ratio.
     const exportRatio = pixelRatioMultiplier;
     const recache =
       exportRatio > Konva.pixelRatio
         ? stage.find<Konva.Image>('Image').filter((n) => n.isCached())
         : [];
-    const savedBlur = recache.map((n) => n.blurRadius());
-    recache.forEach((n, i) => {
-      n.blurRadius((savedBlur[i] / Konva.pixelRatio) * exportRatio);
-      n.cache({ pixelRatio: exportRatio });
-    });
+    recache.forEach((n) => n.cache({ pixelRatio: exportRatio }));
 
     // Editor-only visuals must never reach the file. Export and Save
     // deselect first, but auto-save runs on a timer and captures whatever
@@ -210,10 +205,7 @@ const CanvasStage = forwardRef<CanvasHandle>(function CanvasStage(_props, ref) {
       }
     } finally {
       overlays.forEach((n) => n.visible(true));
-      recache.forEach((n, i) => {
-        n.blurRadius(savedBlur[i]);
-        n.cache();
-      });
+      recache.forEach((n) => n.cache());
       stage.scale(savedScale);
       stage.position(savedPos);
       stage.batchDraw();

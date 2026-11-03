@@ -237,10 +237,10 @@ To use it from another device on the same network (e.g. a phone), run
 
 ## How it's built
 
-- **Vite 8 (Rolldown) + React 18 + TypeScript** — builds for Chrome/Edge
+- **Vite 8 (Rolldown) + React 19 + TypeScript** — builds for Chrome/Edge
   98+, Firefox 94+ and Safari 15.4+ (iOS 15.4+), the oldest browsers the app
   runs in at all
-- **react-konva / konva** — canvas rendering, transforms, filters, export
+- **react-konva 19 / Konva 10** — canvas rendering, transforms, filters, export
 - **Zustand + immer** — editor state, with a bounded undo/redo history
 - **IndexedDB** (via a small wrapper in `src/storage/`) — project + image
   persistence

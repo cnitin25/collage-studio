@@ -39,7 +39,7 @@ specific to working here with Claude Code, or worth calling out twice.
 - `AGENTS.md`'s **Storage**, **State And History** and **Canvas And Export**
   sections record rules the code depends on (storage lock, immutable assets,
   `refitCrop` over `coverCrop`, reference-based unsaved-changes tracking,
-  blur radius in cache pixels, the single blob-URL release subscription,
+  blur radius in canvas pixels (Konva 10 scales it), the single blob-URL release subscription,
   `ColorInput` for colour pickers, `itemSize` for drawn sizes, `UI_OVERLAY`
   for editor-only visuals, stage-relative zoom maths). Read them before
   changing those areas.
