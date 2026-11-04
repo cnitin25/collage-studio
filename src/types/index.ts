@@ -21,6 +21,9 @@ export interface BaseItem {
   cornerRadius?: number; // Phase 2
   borderColor?: string; // Phase 2
   borderWidth?: number; // Phase 2
+
+  /** items sharing a groupId are selected, moved and edited together */
+  groupId?: string;
 }
 
 export interface ImageFilters {
@@ -29,12 +32,19 @@ export interface ImageFilters {
   contrast?: number; // -100..100    (Phase 3)
   saturation?: number; // -100..100  (Phase 3)
   blur?: number; // 0..40 px         (Phase 3)
-  hue?: number; // -180..180, UI convention: POSITIVE = warmer. Negated at
-  // render time since Konva's own hue property runs the opposite direction
-  // (verified numerically against its HSL matrix — see ImageNode.tsx).
+  hue?: number; // -180..180, a hue rotation. Negated at render time, since
+  // Konva's own hue property runs the opposite way to the UI's slider.
+  warmth?: number; // -100..100, colour temperature (positive = warmer); utils/warmth
   enhance?: number; // 0..100, Konva's auto-enhance strength (v2)
   grayscale?: boolean; // mutually exclusive with sepia (v2)
   sepia?: boolean; // mutually exclusive with grayscale (v2)
+  // The rest are ours (utils/adjustments), not Konva's.
+  exposure?: number; // -100..100: ±2 stops, in linear light
+  highlights?: number; // -100..100: negative pulls the bright tones down
+  shadows?: number; // -100..100: positive lifts the dark tones
+  vibrance?: number; // -100..100: saturation, most for muted colours
+  sharpen?: number; // 0..100: an unsharp mask
+  vignette?: number; // -100..100: negative darkens the corners, positive lightens them
   // Remembers which preset produced these values and at what strength, so the
   // Strength slider can recompute from the ORIGINAL recipe rather than
   // compounding scale-downs on an already-scaled value.
@@ -94,6 +104,25 @@ export interface TextItem extends BaseItem {
    * leaves room for scripts with tall matras/ascenders (e.g. Devanagari) so
    * adjacent lines don't visually touch — Konva's own default of 1 is too tight. */
   lineHeight?: number;
+  /** extra space after each letter, px */
+  letterSpacing?: number;
+  /** an outline round the letters, `outlineWidth` px wide, drawn behind the
+   * fill so it never thins them; none while the width is 0 or unset */
+  outlineColor?: string;
+  outlineWidth?: number;
+  shadow?: ShadowStyle;
+  /** a box behind the lines of text */
+  background?: TextBackground;
+}
+
+export interface TextBackground {
+  color: string;
+  /** 0–1 */
+  opacity: number;
+  /** px beyond the text on every side */
+  padding: number;
+  /** corner radius, px */
+  radius: number;
 }
 
 export const DEFAULT_LINE_HEIGHT = 1.4;

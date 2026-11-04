@@ -5,7 +5,7 @@ import { DEFAULT_LINE_HEIGHT, type TextItem } from '../../types';
 import { COARSE_QUERY, useMediaQuery } from '../../hooks/useMediaQuery';
 
 interface Props {
-  hostRef: RefObject<HTMLDivElement>;
+  hostRef: RefObject<HTMLDivElement | null>;
   getStage: () => Konva.Stage | null;
 }
 
@@ -30,6 +30,8 @@ export default function TextEditOverlay({ hostRef, getStage }: Props) {
 function InPlaceEditor({ item, hostRef, getStage }: Props & { item: TextItem }) {
   const updateItem = useEditorStore((s) => s.updateItem);
   const stopEditingText = useEditorStore((s) => s.stopEditingText);
+  // Re-render on zoom/pan so the field stays over its text.
+  useEditorStore((s) => `${s.viewScale},${s.viewX},${s.viewY}`);
 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [val, setVal] = useState(item.text);
@@ -42,6 +44,19 @@ function InPlaceEditor({ item, hostRef, getStage }: Props & { item: TextItem }) 
     return () => clearTimeout(t);
   }, []);
 
+  // As tall as the text: a textarea defaults to two rows and the field hides
+  // its overflow, so a five-line text was edited through a two-line slot.
+  useLayoutEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${ta.scrollHeight}px`;
+  });
+
+  // Measured during render, on purpose: this re-renders on every pan and zoom
+  // (the subscription above), and the field has to sit exactly over the text
+  // as drawn in that same frame. Not compatible with the React Compiler.
+  /* eslint-disable react-hooks/refs */
   const stage = getStage();
   const host = hostRef.current;
   if (!stage || !host) return null;
@@ -51,12 +66,15 @@ function InPlaceEditor({ item, hostRef, getStage }: Props & { item: TextItem }) 
   const scale = stage.scaleX();
   const containerRect = stage.container().getBoundingClientRect();
   const hostRect = host.getBoundingClientRect();
+  /* eslint-enable react-hooks/refs */
   const abs = node.getAbsolutePosition();
   const left = containerRect.left - hostRect.left + abs.x;
   const top = containerRect.top - hostRect.top + abs.y;
 
   const commit = () => {
-    updateItem(item.id, { text: val.length ? val : ' ' });
+    // Unchanged text records nothing: no undo step, no "unsaved changes".
+    const text = val.length ? val : ' ';
+    if (text !== item.text) updateItem(item.id, { text });
     stopEditingText();
   };
 
@@ -85,6 +103,7 @@ function InPlaceEditor({ item, hostRef, getStage }: Props & { item: TextItem }) 
         fontWeight: item.fontStyle.includes('bold') ? 700 : 400,
         fontStyle: item.fontStyle.includes('italic') ? 'italic' : 'normal',
         lineHeight: item.lineHeight ?? DEFAULT_LINE_HEIGHT,
+        letterSpacing: (item.letterSpacing ?? 0) * scale,
         color: item.fill,
         textAlign: item.align,
         transform: `rotate(${node.getAbsoluteRotation()}deg)`,

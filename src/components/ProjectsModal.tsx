@@ -1,18 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useEditorStore, DEFAULT_PROJECT_NAME, hasUnsavedChanges } from '../store/useEditorStore';
 import { listProjects, openProject, removeProject, type ProjectMeta } from '../storage/projects';
 import { exportProjectFile, importProjectFile } from '../storage/projectFile';
 import { projectsMayBeCleared } from '../storage/persistence';
 
 interface Props {
-  open: boolean;
   onClose: () => void;
 }
 
-export default function ProjectsModal({ open, onClose }: Props) {
-  const [projects, setProjects] = useState<ProjectMeta[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
+const reason = (err: unknown) => (err instanceof Error ? err.message : 'an unknown error.');
+
+/** Mounted only while open, so each opening starts fresh and lists anew. */
+export default function ProjectsModal({ onClose }: Props) {
+  // null while the list is loading.
+  const [projects, setProjects] = useState<ProjectMeta[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadSerializedState = useEditorStore((s) => s.loadSerializedState);
@@ -20,25 +22,66 @@ export default function ProjectsModal({ open, onClose }: Props) {
   const currentProjectId = useEditorStore((s) => s.currentProjectId);
   const autoSaveEnabled = useEditorStore((s) => s.autoSaveEnabled);
   const setAutoSaveEnabled = useEditorStore((s) => s.setAutoSaveEnabled);
+  const setImportFailures = useEditorStore((s) => s.setImportFailures);
 
-  const refresh = async () => {
-    setLoading(true);
-    try {
-      setProjects(await listProjects());
-    } finally {
-      setLoading(false);
-    }
-  };
+  const refresh = useCallback(
+    () =>
+      listProjects().then(setProjects, (err: unknown) => {
+        setProjects([]);
+        setError(`Couldn't read your saved projects: ${reason(err)}`);
+      }),
+    [],
+  );
 
   const [mayBeCleared, setMayBeCleared] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // The caller passes a new function each render; the key handler below must
+  // not re-subscribe (and bounce focus out and back) every time it does.
+  const onCloseRef = useRef(onClose);
+  useLayoutEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
-    if (!open) return;
-    refresh();
-    projectsMayBeCleared().then(setMayBeCleared);
-  }, [open]);
+    void refresh();
+    void projectsMayBeCleared().then(setMayBeCleared);
+  }, [refresh]);
 
-  if (!open) return null;
+  // A modal dialog: focus moves in and stays in, Escape closes it, and focus
+  // goes back where it was afterwards. Captured on the document so the
+  // editor's own shortcuts (window listeners) never see these keys.
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onCloseRef.current();
+      } else if (e.key === 'Tab') {
+        const focusable = Array.from(
+          dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [href], [tabindex="0"]'),
+        ).filter((el) => el.offsetParent !== null);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const at = document.activeElement;
+        if (e.shiftKey && (at === first || at === dialog)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && (at === last || !dialog.contains(at))) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+      before?.focus?.();
+    };
+  }, []);
 
   /** Every action that replaces the editor's contents goes through this. */
   const okToDiscard = () =>
@@ -47,23 +90,34 @@ export default function ProjectsModal({ open, onClose }: Props) {
 
   const handleOpen = async (id: string) => {
     if (!okToDiscard()) return;
-    const res = await openProject(id);
-    if (res) {
-      loadSerializedState(res.state, res.meta.id, res.meta.name);
-      onClose();
+    setError(null);
+    try {
+      const res = await openProject(id);
+      if (res) {
+        loadSerializedState(res.state, res.meta.id, res.meta.name, res.meta.updatedAt);
+        onClose();
+      } else {
+        setError("That project couldn't be found. It may have been deleted in another tab.");
+        void refresh();
+      }
+    } catch (err) {
+      setError(`Couldn't open the project: ${reason(err)}`);
     }
   };
 
   const handleDelete = async (p: ProjectMeta) => {
     if (!window.confirm(`Delete "${p.name}"? This can't be undone.`)) return;
-    await removeProject(p.id);
-    const st = useEditorStore.getState();
-    if (p.id === st.currentProjectId) {
-      // What's on screen no longer exists anywhere — mark it unsaved (the
-      // empty-items baseline can never match a canvas that has content).
-      st.markSaved({ ...st.savedRef, items: [] });
+    setError(null);
+    try {
+      await removeProject(p.id);
+    } catch (err) {
+      setError(`Couldn't delete the project: ${reason(err)}`);
+      return;
     }
-    refresh();
+    // Deleting the open project closes it. Left on screen, auto-save would
+    // quietly store it again — the deletion undone behind the user's back.
+    if (p.id === useEditorStore.getState().currentProjectId) resetProject();
+    void refresh();
   };
 
   const handleNew = () => {
@@ -76,6 +130,7 @@ export default function ProjectsModal({ open, onClose }: Props) {
     const st = useEditorStore.getState();
     if (st.items.length === 0) return;
     setExporting(true);
+    setError(null);
     try {
       await exportProjectFile({
         name: st.projectName.trim() || DEFAULT_PROJECT_NAME,
@@ -84,6 +139,8 @@ export default function ProjectsModal({ open, onClose }: Props) {
         spacing: st.spacing,
         lastLayout: st.lastLayout,
       });
+    } catch (err) {
+      setError(`Couldn't export the file: ${reason(err)}`);
     } finally {
       setExporting(false);
     }
@@ -93,7 +150,7 @@ export default function ProjectsModal({ open, onClose }: Props) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    setImportError(null);
+    setError(null);
     try {
       const imported = await importProjectFile(file);
       loadSerializedState(
@@ -101,24 +158,33 @@ export default function ProjectsModal({ open, onClose }: Props) {
         `proj_${Date.now().toString(36)}`,
         imported.name,
       );
+      setImportFailures(imported.skipped.map((p) => ({ ...p, source: file.name })));
       onClose();
     } catch (err) {
-      setImportError(err instanceof Error ? err.message : 'Could not read this file.');
+      setError(err instanceof Error ? err.message : 'Could not read this file.');
     }
   };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="projects-title"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
-          <h2>Projects</h2>
+          <h2 id="projects-title">Projects</h2>
           <button className="btn btn-accent" onClick={handleNew} title="Start a new, empty project">
             New project
           </button>
         </div>
 
-        {loading && <p className="dim small">Loading…</p>}
-        {!loading && projects.length === 0 && (
+        {projects === null && <p className="dim small">Loading…</p>}
+        {projects?.length === 0 && !error && (
           <p className="dim small">No saved projects yet. Use “Save” to store one here.</p>
         )}
 
@@ -150,7 +216,7 @@ export default function ProjectsModal({ open, onClose }: Props) {
             <button
               className="btn"
               disabled={exporting}
-              onClick={handleExportFile}
+              onClick={() => void handleExportFile()}
               title="Download this project as a portable file (photos included)"
             >
               {exporting ? 'Exporting…' : 'Export file (.json)'}
@@ -167,7 +233,7 @@ export default function ProjectsModal({ open, onClose }: Props) {
               type="file"
               accept=".json,application/json"
               hidden
-              onChange={handleImportFile}
+              onChange={(e) => void handleImportFile(e)}
             />
           </div>
         </div>
@@ -175,14 +241,18 @@ export default function ProjectsModal({ open, onClose }: Props) {
           Export saves a single portable file (photos included) you can keep anywhere —
           outside the browser — and reopen later, even on another device or browser.
         </p>
-        {importError && <p className="import-error">{importError}</p>}
+        {error && (
+          <p className="import-error" role="alert">
+            {error}
+          </p>
+        )}
 
         <div className="project-grid">
-          {projects.map((p) => (
+          {projects?.map((p) => (
             <div key={p.id} className={`project-card ${p.id === currentProjectId ? 'is-current' : ''}`}>
               <button
                 className="project-thumb"
-                onClick={() => handleOpen(p.id)}
+                onClick={() => void handleOpen(p.id)}
                 style={p.thumbnail ? { backgroundImage: `url(${p.thumbnail})` } : undefined}
                 aria-label={`Open ${p.name}`}
               >
@@ -197,13 +267,13 @@ export default function ProjectsModal({ open, onClose }: Props) {
                     {new Date(p.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <button className="project-open-btn" onClick={() => handleOpen(p.id)} title={`Open "${p.name}"`}>
+                <button className="project-open-btn" onClick={() => void handleOpen(p.id)} title={`Open "${p.name}"`}>
                   Open
                 </button>
               </div>
               <button
                 className="project-del"
-                onClick={() => handleDelete(p)}
+                onClick={() => void handleDelete(p)}
                 title={`Delete "${p.name}"`}
                 aria-label="Delete"
               >

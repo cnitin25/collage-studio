@@ -3,19 +3,22 @@ import type { ClipShape } from '../types';
 // Draws a closed path for the given shape into a 2D context, filling the w×h box.
 // Used for the image clip, the border stroke, and the shadow caster so all three
 // always agree. No fill/stroke here — the caller decides.
+//
+// `inset` shrinks the shape inside its box. Borders pass half their width, so
+// the whole stroke lands inside the item: centred on the edge, half of it was
+// cut off at the canvas edge and spilled into the gaps between photos.
 
-function roundedRect(ctx: CanvasRenderingContext2D, w: number, h: number, r: number) {
+function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   const rr = Math.max(0, Math.min(r, w / 2, h / 2));
-  ctx.beginPath();
-  ctx.moveTo(rr, 0);
-  ctx.arcTo(w, 0, w, h, rr);
-  ctx.arcTo(w, h, 0, h, rr);
-  ctx.arcTo(0, h, 0, 0, rr);
-  ctx.arcTo(0, 0, w, 0, rr);
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
   ctx.closePath();
 }
 
-function heart(ctx: CanvasRenderingContext2D, w: number, h: number) {
+function heart(ctx: CanvasRenderingContext2D, x0: number, y0: number, w: number, h: number) {
   // Parametric heart, sampled and fitted to the box (robust vs hand-tuned beziers).
   const N = 80;
   const pts: Array<[number, number]> = [];
@@ -35,14 +38,48 @@ function heart(ctx: CanvasRenderingContext2D, w: number, h: number) {
   }
   const sx = w / (maxX - minX);
   const sy = h / (maxY - minY);
-  ctx.beginPath();
   pts.forEach(([x, y], i) => {
-    const px = (x - minX) * sx;
-    const py = (y - minY) * sy;
+    const px = x0 + (x - minX) * sx;
+    const py = y0 + (y - minY) * sy;
     if (i === 0) ctx.moveTo(px, py);
     else ctx.lineTo(px, py);
   });
   ctx.closePath();
+}
+
+/** Add the shape's outline to the current path, without starting a new one. */
+export function traceShapePath(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  shape: ClipShape,
+  radius: number,
+  inset = 0,
+): void {
+  const iw = Math.max(0, w - 2 * inset);
+  const ih = Math.max(0, h - 2 * inset);
+  const cx = inset + iw / 2;
+  const cy = inset + ih / 2;
+  switch (shape) {
+    case 'circle': {
+      const r = Math.min(iw, ih) / 2;
+      ctx.moveTo(cx + r, cy);
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.closePath();
+      break;
+    }
+    case 'ellipse':
+      ctx.moveTo(cx + iw / 2, cy);
+      ctx.ellipse(cx, cy, iw / 2, ih / 2, 0, 0, Math.PI * 2);
+      ctx.closePath();
+      break;
+    case 'heart':
+      heart(ctx, inset, inset, iw, ih);
+      break;
+    case 'rect':
+    default:
+      roundedRect(ctx, inset, inset, iw, ih, radius - inset);
+  }
 }
 
 export function drawShapePath(
@@ -51,25 +88,8 @@ export function drawShapePath(
   h: number,
   shape: ClipShape,
   radius: number,
+  inset = 0,
 ): void {
-  switch (shape) {
-    case 'circle': {
-      const r = Math.min(w, h) / 2;
-      ctx.beginPath();
-      ctx.arc(w / 2, h / 2, r, 0, Math.PI * 2);
-      ctx.closePath();
-      break;
-    }
-    case 'ellipse':
-      ctx.beginPath();
-      ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-      ctx.closePath();
-      break;
-    case 'heart':
-      heart(ctx, w, h);
-      break;
-    case 'rect':
-    default:
-      roundedRect(ctx, w, h, radius);
-  }
+  ctx.beginPath();
+  traceShapePath(ctx, w, h, shape, radius, inset);
 }

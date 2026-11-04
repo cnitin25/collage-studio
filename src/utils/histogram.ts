@@ -9,9 +9,9 @@ export interface Histogram {
 
 /** Bucket RGBA pixel data into a per-channel value histogram. */
 export function histogramFromImageData(data: Uint8ClampedArray, bins = 64): Histogram {
-  const r = new Array(bins).fill(0);
-  const g = new Array(bins).fill(0);
-  const b = new Array(bins).fill(0);
+  const r = new Array<number>(bins).fill(0);
+  const g = new Array<number>(bins).fill(0);
+  const b = new Array<number>(bins).fill(0);
 
   const bucketSize = 256 / bins;
   for (let i = 0; i < data.length; i += 4) {
@@ -29,7 +29,7 @@ export function histogramFromImageData(data: Uint8ClampedArray, bins = 64): Hist
 export function histogramFromCanvas(canvas: HTMLCanvasElement, bins = 64): Histogram {
   const ctx = canvas.getContext('2d');
   if (!ctx || canvas.width === 0 || canvas.height === 0) {
-    const empty = new Array(bins).fill(0);
+    const empty = new Array<number>(bins).fill(0);
     return { r: empty, g: empty, b: empty, max: 1 };
   }
   const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);

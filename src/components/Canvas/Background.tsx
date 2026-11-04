@@ -86,7 +86,7 @@ export default function Background({ canvas }: { canvas: CanvasConfig }) {
         height={h}
         crop={crop}
         filters={blur > 0 ? [Konva.Filters.Blur] : []}
-        blurRadius={blur * Konva.pixelRatio} // cache-pixel units; see ImageNode
+        blurRadius={blur} // canvas px; Konva scales it to the cache
         listening={false}
       />
     );

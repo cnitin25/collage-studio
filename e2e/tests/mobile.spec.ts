@@ -18,6 +18,10 @@ async function pinch(
   center: { x: number; y: number },
   opts: { startSpread: number; endSpread: number; steps?: number },
 ) {
+  test.skip(
+    page.context().browser()?.browserType().name() !== 'chromium',
+    'Two-finger touch is sent through the Chrome DevTools Protocol',
+  );
   const cdp = await page.context().newCDPSession(page);
   const steps = opts.steps ?? 6;
   const points = (spread: number) => [
@@ -213,7 +217,7 @@ test.describe('pinch-zoom anchoring', () => {
     const box = (await page.locator('.konvajs-content').boundingBox())!;
     const { viewScale, viewX, viewY } = await getView(page);
     const canvasWidth = await page.evaluate(
-      () => (window as any).__editorStore.getState().canvas.width as number,
+      () => window.__editorStore.getState().canvas.width,
     );
     const s = box.width / canvasWidth; // display scale
     return { x: ((p.x - box.x) / s - viewX) / viewScale, y: ((p.y - box.y) / s - viewY) / viewScale };
@@ -222,7 +226,7 @@ test.describe('pinch-zoom anchoring', () => {
   test('the point between the fingers stays put, including on a second pinch elsewhere', async ({ page }) => {
     await page.goto('/');
     await page.evaluate(() => {
-      const s = (window as any).__editorStore.getState();
+      const s = window.__editorStore.getState();
       s.addText();
       s.stopEditingText();
       s.select(null);
@@ -254,7 +258,7 @@ test.describe('phone editing flow', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.waitForFunction(() => !!(window as any).__editorStore);
+    await page.waitForFunction(() => !!window.__editorStore);
   });
 
   test('touch controls are finger-sized, and fields are 16px so iOS does not zoom', async ({ page }) => {

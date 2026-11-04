@@ -5,17 +5,28 @@ import type { Download, Page } from '@playwright/test';
 // is exposed as window.__editorStore in dev builds only (see src/main.tsx),
 // which is what `npm run test:e2e` runs against.
 
-export type ImageKind = 'photo' | 'checker' | 'redblue';
+export type ImageKind = 'photo' | 'checker' | 'redblue' | 'solid' | 'edge';
 
-/** Draw a test image in the page and add it to the canvas. Returns its item id. */
-export async function addImage(page: Page, kind: ImageKind = 'photo', w = 1200, h = 900): Promise<string> {
+/** Draw a test image in the page and add it to the canvas. Returns its item id.
+ *  `fill` is the colour of a 'solid' image. 'edge' is two greys, #505050 on
+ *  the left half and #b0b0b0 on the right. */
+export async function addImage(
+  page: Page,
+  kind: ImageKind = 'photo',
+  w = 1200,
+  h = 900,
+  fill = '#00ff00',
+): Promise<string> {
   return page.evaluate(
-    async ({ kind, w, h }) => {
+    async ({ kind, w, h, fill }) => {
       const c = document.createElement('canvas');
       c.width = w;
       c.height = h;
       const ctx = c.getContext('2d')!;
-      if (kind === 'checker') {
+      if (kind === 'solid') {
+        ctx.fillStyle = fill;
+        ctx.fillRect(0, 0, w, h);
+      } else if (kind === 'checker') {
         // 1px checkerboard: maximum fine detail, so any resampling blur shows.
         const img = ctx.createImageData(w, h);
         for (let y = 0; y < h; y++)
@@ -26,10 +37,10 @@ export async function addImage(page: Page, kind: ImageKind = 'photo', w = 1200, 
             img.data[i + 3] = 255;
           }
         ctx.putImageData(img, 0, 0);
-      } else if (kind === 'redblue') {
-        ctx.fillStyle = '#ff0000';
+      } else if (kind === 'redblue' || kind === 'edge') {
+        ctx.fillStyle = kind === 'edge' ? '#505050' : '#ff0000';
         ctx.fillRect(0, 0, w / 2, h);
-        ctx.fillStyle = '#0000ff';
+        ctx.fillStyle = kind === 'edge' ? '#b0b0b0' : '#0000ff';
         ctx.fillRect(w / 2, 0, w / 2, h);
       } else {
         const g = ctx.createLinearGradient(0, 0, w, h);
@@ -43,47 +54,95 @@ export async function addImage(page: Page, kind: ImageKind = 'photo', w = 1200, 
         ctx.fill();
       }
       const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!), 'image/png'));
-      const store = (window as any).__editorStore;
+      const store = window.__editorStore;
       store.getState().addImages([{ src: URL.createObjectURL(blob), naturalWidth: w, naturalHeight: h }]);
       const items = store.getState().items;
-      return items[items.length - 1].id as string;
+      return items[items.length - 1].id;
     },
-    { kind, w, h },
+    { kind, w, h, fill },
   );
+}
+
+/** Pixel accessor handed to an analyzeExport() callback: [r, g, b, a] at (x, y). */
+export type Px = (x: number, y: number) => [number, number, number, number];
+
+/**
+ * Decode a downloaded image in the page and run `analyze` over its pixels
+ * there, returning only the result — a whole image's pixels are far too many
+ * to ship back to the test. `analyze` is serialised, so it may only use its
+ * arguments — pass anything else from the test in `arg`.
+ */
+export async function analyzeExport<T, A = undefined>(
+  page: Page,
+  download: Download,
+  analyze: (px: Px, width: number, height: number, arg: A) => T,
+  arg?: A,
+): Promise<T> {
+  const b64 = readFileSync((await download.path())).toString('base64');
+  return page.evaluate(
+    async ({ b64, src, arg }) => {
+      const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+      const bmp = await createImageBitmap(new Blob([bytes]));
+      const c = document.createElement('canvas');
+      c.width = bmp.width;
+      c.height = bmp.height;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(bmp, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      const px = (x: number, y: number) => {
+        const i = (Math.round(y) * c.width + Math.round(x)) * 4;
+        return [d[i], d[i + 1], d[i + 2], d[i + 3]];
+      };
+      // `analyze` arrives as source text: a function can't cross into the page.
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const run = new Function('px', 'w', 'h', 'arg', `return (${src})(px, w, h, arg);`) as (
+        px: (x: number, y: number) => number[],
+        w: number,
+        h: number,
+        arg: unknown,
+      ) => unknown;
+      return run(px, c.width, c.height, arg);
+    },
+    { b64, src: analyze.toString(), arg },
+  ) as Promise<T>;
 }
 
 /** Run an expression against the store's current state: `s` is getState(). */
 export function state<T>(page: Page, expr: string): Promise<T> {
-  return page.evaluate(`(() => { const s = window.__editorStore.getState(); return ${expr}; })()`) as Promise<T>;
+  return page.evaluate<T>(`(() => { const s = window.__editorStore.getState(); return ${expr}; })()`);
 }
 
 /** Call store actions: `s` is getState(). */
 export function act(page: Page, body: string): Promise<void> {
-  return page.evaluate(`(() => { const s = window.__editorStore.getState(); ${body}; })()`) as Promise<void>;
+  return page.evaluate<void>(`(() => { const s = window.__editorStore.getState(); ${body}; })()`);
 }
 
 /** Keys currently in one of the app's IndexedDB object stores. */
 export function idbKeys(page: Page, storeName: 'projects' | 'assets'): Promise<string[]> {
   return page.evaluate(
-    (storeName) =>
-      new Promise<string[]>((resolve, reject) => {
-        const req = indexedDB.open('collage-studio');
-        req.onerror = () => reject(req.error);
-        req.onsuccess = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains(storeName)) {
-            db.close();
-            resolve([]);
-            return;
-          }
-          const keysReq = db.transaction(storeName).objectStore(storeName).getAllKeys();
-          keysReq.onsuccess = () => {
-            db.close();
-            resolve(keysReq.result as string[]);
-          };
-          keysReq.onerror = () => reject(keysReq.error);
-        };
-      }),
+    async (storeName) =>
+      // Opening a database that doesn't exist yet would create it — empty,
+      // ahead of the app's own first open. Look it up first.
+      !(await indexedDB.databases()).some((d) => d.name === 'collage-studio')
+        ? []
+        : new Promise<string[]>((resolve, reject) => {
+            const req = indexedDB.open('collage-studio');
+            req.onerror = () => reject(req.error ?? new Error('IndexedDB open failed'));
+            req.onsuccess = () => {
+              const db = req.result;
+              if (!db.objectStoreNames.contains(storeName)) {
+                db.close();
+                resolve([]);
+                return;
+              }
+              const keysReq = db.transaction(storeName).objectStore(storeName).getAllKeys();
+              keysReq.onsuccess = () => {
+                db.close();
+                resolve(keysReq.result as string[]);
+              };
+              keysReq.onerror = () => reject(keysReq.error ?? new Error('IndexedDB read failed'));
+            };
+          }),
     storeName,
   );
 }
@@ -119,7 +178,7 @@ export interface ImageStats {
  * exported 'redblue' image — i.e. how far a blur has spread that edge.
  */
 export async function redEdgeWidth(page: Page, download: Download): Promise<{ edge: number; imageWidth: number }> {
-  const b64 = readFileSync((await download.path())!).toString('base64');
+  const b64 = readFileSync((await download.path())).toString('base64');
   return page.evaluate(async (b64) => {
     const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
     const bmp = await createImageBitmap(new Blob([bytes]));
@@ -142,7 +201,7 @@ export async function redEdgeWidth(page: Page, download: Download): Promise<{ ed
 /** Decode a downloaded image in the browser and measure it. */
 export async function imageStats(page: Page, download: Download, downscaleTo?: number): Promise<ImageStats> {
   const path = await download.path();
-  const b64 = readFileSync(path!).toString('base64');
+  const b64 = readFileSync(path).toString('base64');
   return page.evaluate(
     async ({ b64, downscaleTo }) => {
       const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));

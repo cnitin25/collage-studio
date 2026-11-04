@@ -3,6 +3,7 @@ import { useEditorStore } from '../../store/useEditorStore';
 import type { BackgroundType, CollageItem, PatternKind } from '../../types';
 import { extractPalette } from '../../utils/palette';
 import { loadImageFile } from '../../utils/loadImage';
+import { withBusy } from '../../utils/importPhotos';
 import { uid } from '../../utils/id';
 import Slider from '../ui/Slider';
 import ColorInput from '../ui/ColorInput';
@@ -66,6 +67,9 @@ export default function BackgroundPanel() {
     setLoading(true);
     try {
       setPalette(await extractPalette(paletteSource, 6));
+    } catch {
+      // The photo is already on the canvas, so this only fails if its data is
+      // gone; keep whatever palette was showing.
     } finally {
       setLoading(false);
     }
@@ -84,7 +88,7 @@ export default function BackgroundPanel() {
     e.target.value = '';
     if (!file) return;
     try {
-      const loaded = await loadImageFile(file);
+      const loaded = await withBusy('Adding image…', () => loadImageFile(file));
       setBackground({
         backgroundType: 'image',
         backgroundImageSrc: loaded.src,
@@ -162,7 +166,9 @@ export default function BackgroundPanel() {
               {photos.map((p) => (
                 <button
                   key={p.id}
-                  className={`bg-thumb ${canvas.backgroundImageSrc === p.src ? 'is-active' : ''}`}
+                  // By asset, not URL: a reopened project gives the background
+                  // its own object URL for the same stored photo.
+                  className={`bg-thumb ${p.assetId && canvas.backgroundAssetId === p.assetId ? 'is-active' : ''}`}
                   onClick={() =>
                     setBackground({
                       backgroundType: 'image',
@@ -182,7 +188,7 @@ export default function BackgroundPanel() {
           <button className="btn full" style={{ marginTop: 10 }} onClick={() => fileRef.current?.click()}>
             Upload image
           </button>
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={onUpload} />
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void onUpload(e)} />
           <div className="sliders" style={{ marginTop: 12 }}>
             <Slider
               label="Blur"
@@ -233,7 +239,7 @@ export default function BackgroundPanel() {
         <button
           className="link-btn"
           disabled={!paletteSource || loading}
-          onClick={runExtract}
+          onClick={() => void runExtract()}
           title="Pull a color palette from the selected (or first) photo"
         >
           {loading ? 'Reading…' : 'From photo'}

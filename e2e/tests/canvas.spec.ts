@@ -16,7 +16,7 @@ type Img = {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
 });
 
 test('the histogram reads the whole photo, not its top-left corner', async ({ page }) => {
@@ -127,6 +127,7 @@ test('one colour-picker session is one undo step', async ({ page }) => {
   await act(page, `s.requestPanel('Collage Background')`);
   const before = await state<number>(page, 's.past.length');
   await page.locator('[data-panel-title="Collage Background"] input[type=color]').evaluate((el: HTMLInputElement) => {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- called on the input below
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
     // Dragging inside the picker fires `input` repeatedly…
     for (const v of ['#101010', '#202020', '#303030', '#404040', '#505050', '#606060']) {
@@ -175,7 +176,7 @@ test('an undone photo is released once a new action discards the redo branch', a
 test('auto-save previews never include selection handles or crop outlines', async ({ page }) => {
   await page.clock.install();
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
   const id = await addImage(page, 'redblue', 1200, 900);
   await act(page, `s.applyLayout({ type: 'grid' }); s.setAutoSaveEnabled(true); s.startCrop('${id}')`);
   // Let the photo decode and draw in real time first. Otherwise the fake clock
@@ -188,11 +189,12 @@ test('auto-save previews never include selection handles or crop outlines', asyn
       () =>
         new Promise<{ thumbnail: string; updatedAt: number }>((resolve, reject) => {
           const req = indexedDB.open('collage-studio');
-          req.onerror = () => reject(req.error);
+          req.onerror = () => reject(req.error ?? new Error('IndexedDB open failed'));
           req.onsuccess = () => {
             if (!req.result.objectStoreNames.contains('projects')) return resolve({ thumbnail: '', updatedAt: 0 });
             const all = req.result.transaction('projects').objectStore('projects').getAll();
-            all.onsuccess = () => resolve(all.result[0] ?? { thumbnail: '', updatedAt: 0 });
+            all.onsuccess = () =>
+              resolve((all.result as { thumbnail: string; updatedAt: number }[])[0] ?? { thumbnail: '', updatedAt: 0 });
           };
         }),
     );

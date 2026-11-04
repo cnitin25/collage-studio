@@ -9,6 +9,8 @@ export interface LoadedImage {
 export interface ImageLoadFailure {
   name: string;
   reason: string;
+  /** The project file it came from, when a part of an imported project was left out. */
+  source?: string;
 }
 
 // Trust the extension as well as the MIME type — file.type is empty or wrong
@@ -108,14 +110,17 @@ const IMPORT_CONCURRENCY = 2;
  */
 export async function loadImageFiles(
   files: File[],
+  /** Called as each image finishes (or fails): `done` of `total`. */
+  onProgress?: (done: number, total: number) => void,
 ): Promise<{ images: LoadedImage[]; failures: ImageLoadFailure[] }> {
   const candidates = files.filter(looksLikeImage);
   const failures: ImageLoadFailure[] = files
     .filter((f) => !looksLikeImage(f))
     .map((f) => ({ name: f.name, reason: 'Not a recognized image file.' }));
 
-  const settled: PromiseSettledResult<LoadedImage>[] = new Array(candidates.length);
+  const settled = new Array<PromiseSettledResult<LoadedImage>>(candidates.length);
   let next = 0;
+  let done = 0;
   const worker = async () => {
     while (next < candidates.length) {
       const i = next++;
@@ -124,6 +129,7 @@ export async function loadImageFiles(
       } catch (reason) {
         settled[i] = { status: 'rejected', reason };
       }
+      onProgress?.(++done, candidates.length);
     }
   };
   await Promise.all(Array.from({ length: Math.min(IMPORT_CONCURRENCY, candidates.length) }, worker));

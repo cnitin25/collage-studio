@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useEditorStore } from '../../store/useEditorStore';
 
 interface Props {
@@ -26,11 +26,11 @@ export default function ColorInput({ value, label, onLive }: Props) {
   const ref = useRef<HTMLInputElement>(null);
 
   // Stable for the component's life, so the listener below can be removed.
-  const finish = useRef(() => {
+  const finish = useCallback(() => {
     if (!active.current) return;
     active.current = false;
     useEditorStore.getState().commitChange();
-  }).current;
+  }, []);
 
   useEffect(() => {
     const el = ref.current;

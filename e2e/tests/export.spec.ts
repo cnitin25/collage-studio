@@ -1,9 +1,13 @@
 import { test, expect, devices, type Page } from '@playwright/test';
 import { act, addImage, exportImage, imageStats, redEdgeWidth } from './helpers';
 
+/** What a stubbed navigator.share was handed. */
+type SharedFile = { name: string; type: string; size: number };
+type SharedWindow = Window & { __shared?: true | SharedFile };
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
 });
 
 test('a filtered photo exports as sharp as an unfiltered one at 3x', async ({ page }) => {
@@ -43,16 +47,17 @@ test('JPEG export fills rounded collage corners with white, not black', async ({
 
 test('desktop downloads even where the browser can share files', async ({ page }) => {
   await page.evaluate(() => {
-    (navigator as any).canShare = () => true;
-    (navigator as any).share = async () => {
-      (window as any).__shared = true;
+    navigator.canShare = () => true;
+    navigator.share = () => {
+      (window as SharedWindow).__shared = true;
+      return Promise.resolve();
     };
   });
   await addImage(page);
   await act(page, `s.applyLayout({ type: 'grid' })`);
   const download = await exportImage(page, 'png', 1);
   expect(download.suggestedFilename()).toBe('Collage.png');
-  expect(await page.evaluate(() => (window as any).__shared)).toBeUndefined();
+  expect(await page.evaluate(() => (window as SharedWindow).__shared)).toBeUndefined();
 });
 
 test.describe('on a phone', () => {
@@ -67,16 +72,17 @@ test.describe('on a phone', () => {
   async function stubShare(page: Page, failFirstWith?: string) {
     await page.evaluate((failFirstWith) => {
       let calls = 0;
-      (navigator as any).canShare = () => true;
-      (navigator as any).share = async (data: { files: File[] }) => {
+      navigator.canShare = () => true;
+      navigator.share = (data?: ShareData) => {
         calls++;
-        if (failFirstWith && calls === 1) throw new DOMException('no gesture', failFirstWith);
-        const f = data.files[0];
-        (window as any).__shared = { name: f.name, type: f.type, size: f.size };
+        if (failFirstWith && calls === 1) return Promise.reject(new DOMException('no gesture', failFirstWith));
+        const f = data!.files![0];
+        (window as SharedWindow).__shared = { name: f.name, type: f.type, size: f.size };
+        return Promise.resolve();
       };
     }, failFirstWith);
   }
-  const shared = (page: Page) => page.evaluate(() => (window as any).__shared ?? null);
+  const shared = (page: Page) => page.evaluate(() => ((window as SharedWindow).__shared as SharedFile | undefined) ?? null);
 
   test('Export hands the image to the share sheet', async ({ page }) => {
     await stubShare(page);
@@ -84,7 +90,7 @@ test.describe('on a phone', () => {
     await act(page, `s.applyLayout({ type: 'grid' }); s.select(null)`);
     await page.locator('.toolbar-export').click();
     await expect.poll(() => shared(page)).toMatchObject({ name: 'Collage.png', type: 'image/png' });
-    expect((await shared(page)).size).toBeGreaterThan(1000);
+    expect((await shared(page))?.size).toBeGreaterThan(1000);
   });
 
   test('when sharing needs a fresh tap, the toast offers one', async ({ page }) => {
@@ -102,8 +108,8 @@ test.describe('on a phone', () => {
   test('a 3x Story export is kept under the iOS canvas limit instead of coming out blank', async ({ page }) => {
     test.slow(); // a ~10 MP PNG, decoded again in the page to measure it
     await page.evaluate(() => {
-      delete (Navigator.prototype as any).share;
-      delete (Navigator.prototype as any).canShare;
+      delete (Navigator.prototype as Partial<Navigator>).share;
+      delete (Navigator.prototype as Partial<Navigator>).canShare;
     });
     await addImage(page);
     await act(page, `s.setCanvasSize(1080, 1920); s.applyLayout({ type: 'grid' }); s.setExportScale(3); s.select(null)`);
@@ -115,9 +121,10 @@ test.describe('on a phone', () => {
     await page.locator('.inspector-close').click();
 
     const [download] = await Promise.all([page.waitForEvent('download'), page.locator('.toolbar-export').click()]);
+    // Checked before decoding the ~10 MP file below, which can outlast the toast.
+    await expect(page.locator('.toast')).toContainText('Exported at');
     const out = await imageStats(page, download);
     expect(out.width * out.height).toBeLessThanOrEqual(16_777_216);
     expect(out.width).toBeGreaterThan(1080 * 2); // as large as allowed, not dropped to 1×
-    await expect(page.locator('.toast')).toContainText('Exported at');
   });
 });

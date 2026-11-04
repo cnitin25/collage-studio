@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type ButtonHTMLAttributes } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEditorStore } from '../store/useEditorStore';
 import { useThemeStore } from '../store/useThemeStore';
 import { useReplacePhoto } from '../hooks/useReplacePhoto';
-import { isMac } from '../utils/platform';
-import Icon, { type IconName } from './ui/Icon';
+import { MOD } from '../utils/platform';
+import Icon from './ui/Icon';
+import ToolButton from './ui/ToolButton';
 
 interface Props {
   onAddImages: () => void;
@@ -12,38 +13,9 @@ interface Props {
   onSave: () => void;
   onOpenProjects: () => void;
   onClearCanvas: () => void;
+  onToggleAutoSave: () => void;
   toolsOpen: boolean;
   onToggleTools: () => void;
-}
-
-const MOD = isMac() ? '⌘' : 'Ctrl+';
-
-type ToolButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  icon: IconName;
-  /** Accessible name; also the tooltip unless `tip` says more. */
-  label: string;
-  tip?: string;
-  /** Right-align the tooltip, for buttons near the window's right edge. */
-  tipEnd?: boolean;
-};
-
-/**
- * Icon-only toolbar button. The name lives in aria-label; sighted mouse users
- * get it from the CSS tooltip (`data-tip`, see index.css), which replaces the
- * slower native `title` tooltip — so no `title` here, or both would show.
- */
-function ToolButton({ icon, label, tip, tipEnd, className = '', ...rest }: ToolButtonProps) {
-  return (
-    <button
-      className={`btn icon-btn ${className}`}
-      aria-label={label}
-      data-tip={tip ?? label}
-      data-tip-align={tipEnd ? 'end' : undefined}
-      {...rest}
-    >
-      <Icon name={icon} />
-    </button>
-  );
 }
 
 export default function Toolbar({
@@ -53,6 +25,7 @@ export default function Toolbar({
   onSave,
   onOpenProjects,
   onClearCanvas,
+  onToggleAutoSave,
   toolsOpen,
   onToggleTools,
 }: Props) {
@@ -62,10 +35,12 @@ export default function Toolbar({
   const canRedo = useEditorStore((s) => s.future.length > 0);
   const removeSelected = useEditorStore((s) => s.removeSelected);
   const duplicateSelected = useEditorStore((s) => s.duplicateSelected);
-  const selectedId = useEditorStore((s) => s.selectedId);
+  const hasSelection = useEditorStore((s) => s.selectedIds.length > 0);
   const itemCount = useEditorStore((s) => s.items.length);
   const projectName = useEditorStore((s) => s.projectName);
   const setProjectName = useEditorStore((s) => s.setProjectName);
+  const autoSave = useEditorStore((s) => s.autoSaveEnabled);
+  const lastSavedAt = useEditorStore((s) => s.lastSavedAt);
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
   const replace = useReplacePhoto();
@@ -99,6 +74,11 @@ export default function Toolbar({
   };
 
   const themeLabel = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+  const savedAt =
+    lastSavedAt && new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const autoSaveTip = autoSave
+    ? `Auto-save on${savedAt ? ` · saved ${savedAt}` : ''} — click to turn off`
+    : 'Auto-save off — click to turn it on';
 
   return (
     <header className="toolbar">
@@ -110,6 +90,18 @@ export default function Toolbar({
           spellCheck={false}
           onChange={(e) => setProjectName(e.target.value)}
           aria-label="Project name"
+        />
+        {/* Next to the name, where save status lives in document apps, and on
+            every layout: switched off, it's the only sign that closing the
+            app can lose work. */}
+        <ToolButton
+          className={`btn-ghost autosave-toggle ${autoSave ? 'is-on' : 'is-off'}`}
+          icon={autoSave ? 'cloudCheck' : 'cloudOff'}
+          label="Auto-save"
+          tip={autoSaveTip}
+          tipStart
+          aria-pressed={autoSave}
+          onClick={onToggleAutoSave}
         />
       </div>
 
@@ -142,7 +134,7 @@ export default function Toolbar({
             label="Duplicate"
             tip={`Duplicate (${MOD}D)`}
             onClick={duplicateSelected}
-            disabled={!selectedId}
+            disabled={!hasSelection}
           />
           <ToolButton
             className="toolbar-mid-hide"
@@ -150,7 +142,7 @@ export default function Toolbar({
             label="Delete"
             tip="Delete (Del)"
             onClick={removeSelected}
-            disabled={!selectedId}
+            disabled={!hasSelection}
           />
           <ToolButton
             className="toolbar-mid-hide"
@@ -162,12 +154,12 @@ export default function Toolbar({
           />
           <div className="divider" />
           <ToolButton icon="folder" label="Projects" tip="Open, save, or delete projects" onClick={onOpenProjects} />
-          <ToolButton className="btn-primary" icon="save" label="Save" tip="Save to this browser" onClick={onSave} />
+          <ToolButton className="btn-primary" icon="save" label="Save" tip={`Save to this browser (${MOD}S)`} onClick={onSave} />
           <ToolButton
             className="btn-primary"
             icon="download"
             label="Export"
-            tip="Export as an image"
+            tip={`Export as an image (${MOD}Shift+E)`}
             tipEnd
             onClick={onExport}
             disabled={itemCount === 0}
@@ -233,7 +225,7 @@ export default function Toolbar({
               <button
                 className="overflow-item"
                 role="menuitem"
-                disabled={!selectedId}
+                disabled={!hasSelection}
                 onClick={() => runFromMenu(duplicateSelected)}
               >
                 <Icon name="copy" /> Duplicate
@@ -241,7 +233,7 @@ export default function Toolbar({
               <button
                 className="overflow-item"
                 role="menuitem"
-                disabled={!selectedId}
+                disabled={!hasSelection}
                 onClick={() => runFromMenu(removeSelected)}
               >
                 <Icon name="trash" /> Delete
@@ -255,6 +247,18 @@ export default function Toolbar({
                 <Icon name="eraser" /> Clear canvas
               </button>
               <div className="overflow-sep" role="separator" />
+              <button
+                className="overflow-item menu-rename"
+                role="menuitem"
+                onClick={() =>
+                  runFromMenu(() => {
+                    const name = window.prompt('Project name', projectName);
+                    if (name?.trim()) setProjectName(name.trim());
+                  })
+                }
+              >
+                <Icon name="edit" /> Rename project…
+              </button>
               <button className="overflow-item menu-compact" role="menuitem" onClick={() => runFromMenu(onOpenProjects)}>
                 <Icon name="folder" /> Projects
               </button>

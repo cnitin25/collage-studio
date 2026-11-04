@@ -1,16 +1,61 @@
 import { useEditorStore } from '../../store/useEditorStore';
+import { useSelectedPhotos } from '../../hooks/useSelectedPhotos';
 import { FRAMES } from '../../style/frames';
 import { extractPalette } from '../../utils/palette';
+import type { ImageItem } from '../../types';
 import Slider from '../ui/Slider';
 import ColorInput from '../ui/ColorInput';
 import CollapsiblePanel from './CollapsiblePanel';
+import PhotoScopeNote from './PhotoScopeNote';
 
 const BORDER_COLORS = ['#ffffff', '#15171d', '#ff7a59', '#3b6ef5', '#2dba78', '#f5d04e'];
 
-export default function StylePanel() {
-  const selectedId = useEditorStore((s) => s.selectedId);
-  const items = useEditorStore((s) => s.items);
+/** Frame chips for the selected photos: one lights up when they all have it. */
+function FrameChips({ photos }: { photos: ImageItem[] }) {
   const applyFrame = useEditorStore((s) => s.applyFrame);
+  return (
+    <>
+      <p className="subhead">Frame</p>
+      <div className="chip-row wrap">
+        {FRAMES.map((fr) => (
+          <button
+            key={fr.id}
+            className={`chip ${photos.every((p) => p.frame === fr.id) ? 'is-active' : ''}`}
+            onClick={() => applyFrame(fr.id)}
+          >
+            {fr.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** A selection of several: a frame, or a copied style, for every photo in it. */
+function SeveralPhotos({ photos }: { photos: ImageItem[] }) {
+  const pasteStyle = useEditorStore((s) => s.pasteStyle);
+  const hasClipboard = useEditorStore((s) => s.styleClipboard !== null);
+  return (
+    <CollapsiblePanel title="Photo Border">
+      <PhotoScopeNote photoCount={photos.length} />
+      <FrameChips photos={photos} />
+      <p className="subhead">Apply style</p>
+      <div className="chip-row">
+        <button
+          className="chip"
+          disabled={!hasClipboard}
+          onClick={pasteStyle}
+          title={hasClipboard ? 'Paste the copied style onto the selected photos' : 'Select one photo and copy its style first'}
+        >
+          Paste
+        </button>
+      </div>
+      <p className="dim small">Select one photo to copy its style, or for its border and corners.</p>
+    </CollapsiblePanel>
+  );
+}
+
+function OnePhoto({ sel }: { sel: ImageItem }) {
   const updateItem = useEditorStore((s) => s.updateItem);
   const beginChange = useEditorStore((s) => s.beginChange);
   const updateItemLive = useEditorStore((s) => s.updateItemLive);
@@ -21,12 +66,13 @@ export default function StylePanel() {
   const hasClipboard = useEditorStore((s) => s.styleClipboard !== null);
   const photoCount = useEditorStore((s) => s.items.filter((i) => i.type === 'image').length);
 
-  const sel = items.find((i) => i.id === selectedId);
-  if (!sel || sel.type !== 'image') return null;
-
   const autoBorderColor = async () => {
-    const colors = await extractPalette(sel.src, 4);
-    if (colors[0]) updateItem(sel.id, { borderColor: colors[0] });
+    try {
+      const colors = await extractPalette(sel.src, 4);
+      if (colors[0]) updateItem(sel.id, { borderColor: colors[0] });
+    } catch {
+      // Only fails if the photo's data is gone; the border keeps its colour.
+    }
   };
 
   return (
@@ -52,18 +98,7 @@ export default function StylePanel() {
         ))}
       </div>
 
-      <p className="subhead">Frame</p>
-      <div className="chip-row wrap">
-        {FRAMES.map((fr) => (
-          <button
-            key={fr.id}
-            className={`chip ${sel.frame === fr.id ? 'is-active' : ''}`}
-            onClick={() => applyFrame(fr.id)}
-          >
-            {fr.label}
-          </button>
-        ))}
-      </div>
+      <FrameChips photos={[sel]} />
 
       <div className="sliders" style={{ marginTop: 16 }}>
         <Slider
@@ -118,7 +153,7 @@ export default function StylePanel() {
 
       <div className="panel-head" style={{ marginTop: 16 }}>
         <p className="subhead" style={{ margin: 0 }}>Border color</p>
-        <button className="link-btn" onClick={autoBorderColor} title="Set the border color from this photo's dominant color">
+        <button className="link-btn" onClick={() => void autoBorderColor()} title="Set the border color from this photo's dominant color">
           Auto from photo
         </button>
       </div>
@@ -167,4 +202,11 @@ export default function StylePanel() {
       </button>
     </CollapsiblePanel>
   );
+}
+
+export default function StylePanel() {
+  const isOneItem = useEditorStore((s) => s.selectedId !== null);
+  const photos = useSelectedPhotos();
+  if (photos.length === 0) return null;
+  return isOneItem ? <OnePhoto sel={photos[0]} /> : <SeveralPhotos photos={photos} />;
 }

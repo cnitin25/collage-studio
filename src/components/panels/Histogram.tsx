@@ -33,6 +33,9 @@ export default function Histogram({ item }: { item: ImageItem }) {
         const rect = node.getClientRect();
         const pixelRatio = Math.min(1, THUMB / Math.max(1, rect.width, rect.height));
         const canvas = node.toCanvas({ pixelRatio });
+        // Reads the Konva node as rendered, which only exists once this
+        // commit has drawn it — so this can't be computed during render.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setData(histogramFromCanvas(canvas));
         return;
       } catch {
@@ -43,9 +46,15 @@ export default function Histogram({ item }: { item: ImageItem }) {
     // Node not mounted yet (e.g. first paint) — show the original file
     // until it registers; the next edit will pick up the live node.
     let cancelled = false;
-    computeHistogram(item.src).then((h) => {
-      if (!cancelled) setData(h);
-    });
+    computeHistogram(item.src).then(
+      (h) => {
+        if (!cancelled) setData(h);
+      },
+      // The photo's own src failed to decode: show an empty chart, not an error.
+      () => {
+        if (!cancelled) setData(null);
+      },
+    );
     return () => {
       cancelled = true;
     };

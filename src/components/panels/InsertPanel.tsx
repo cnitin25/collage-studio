@@ -4,18 +4,14 @@ import CollapsiblePanel from './CollapsiblePanel';
 import type { TextAlign } from '../../types';
 import Slider from '../ui/Slider';
 import ColorInput from '../ui/ColorInput';
+import { STICKERS, stickerImage } from '../../style/stickers';
 
-const STICKERS = [
-  '⭐', '❤️', '✨', '🎉', '🌟', '🔥', '😍', '😎',
-  '🥳', '🌈', '☀️', '🌸', '🍩', '🎈', '👑', '💯',
-  '📌', '✅', '➡️', '💬', '🦄', '🐱', '🌿', '🎂',
-];
-
-const FONTS = [
+// `aliases`: the value a font had before, which saved projects still carry.
+const FONTS: { label: string; value: string; aliases?: string[] }[] = [
   { label: 'Sans', value: 'Inter, system-ui, sans-serif' },
-  { label: 'Serif', value: 'Georgia, "Times New Roman", serif' },
-  { label: 'Mono', value: 'ui-monospace, "Courier New", monospace' },
-  { label: 'Display', value: 'Impact, "Arial Black", sans-serif' },
+  { label: 'Serif', value: 'Gelasio, Georgia, "Times New Roman", serif', aliases: ['Georgia, "Times New Roman", serif'] },
+  { label: 'Mono', value: '"Courier Prime", "Courier New", monospace', aliases: ['ui-monospace, "Courier New", monospace'] },
+  { label: 'Display', value: 'Anton, Impact, "Arial Black", sans-serif', aliases: ['Impact, "Arial Black", sans-serif'] },
   { label: 'Script', value: '"Dancing Script", cursive' },
   { label: 'Brush', value: 'Pacifico, cursive' },
   { label: 'Hand', value: 'Caveat, cursive' },
@@ -82,10 +78,20 @@ export default function InsertPanel() {
       <div className="emoji-grid">
         {STICKERS.map((e) => (
           <button key={e} className="emoji-btn" onClick={() => addSticker(e)} title={`Add ${e} sticker`} aria-label={`Add ${e}`}>
-            {e}
+            <img src={stickerImage(e)} alt="" draggable={false} />
           </button>
         ))}
       </div>
+      <p className="sticker-credit">
+        Emoji graphics:{' '}
+        <a href="https://github.com/jdecked/twemoji" target="_blank" rel="noopener noreferrer">
+          Twemoji
+        </a>{' '}
+        by Twitter and contributors,{' '}
+        <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">
+          CC BY 4.0
+        </a>
+      </p>
 
       {selText && (
         <>
@@ -117,7 +123,7 @@ export default function InsertPanel() {
             {FONTS.map((fnt) => (
               <button
                 key={fnt.value}
-                className={`chip ${selText.fontFamily === fnt.value ? 'is-active' : ''}`}
+                className={`chip ${selText.fontFamily === fnt.value || fnt.aliases?.includes(selText.fontFamily) ? 'is-active' : ''}`}
                 onClick={() => updateItem(selText.id, { fontFamily: fnt.value })}
               >
                 {fnt.label}

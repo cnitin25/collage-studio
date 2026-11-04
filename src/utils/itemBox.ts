@@ -16,6 +16,7 @@ export function textHeight(item: TextItem): number {
     fontFamily: item.fontFamily,
     fontStyle: item.fontStyle,
     lineHeight: item.lineHeight ?? DEFAULT_LINE_HEIGHT,
+    letterSpacing: item.letterSpacing ?? 0,
   });
   return probe.height();
 }

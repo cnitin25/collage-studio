@@ -13,7 +13,7 @@ async function openProjects(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.waitForFunction(() => !!(window as any).__editorStore);
+  await page.waitForFunction(() => !!window.__editorStore);
 });
 
 test('a storage failure while saving is reported instead of showing "Saved"', async ({ page }) => {
@@ -21,6 +21,7 @@ test('a storage failure while saving is reported instead of showing "Saved"', as
   // Simulate a full disk: every write to the photo store fails with the error
   // browsers raise when the site's quota is exhausted.
   await page.evaluate(() => {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- re-applied to each call's own store
     const put = IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put = function (this: IDBObjectStore, ...args: Parameters<typeof put>) {
       if (this.name === 'assets') throw new DOMException('Quota exceeded', 'QuotaExceededError');
@@ -60,7 +61,7 @@ test('replacing a photo drops the old stored blob on the next save', async ({ pa
     c.height = 300;
     c.getContext('2d')!.fillRect(0, 0, 400, 300);
     const blob: Blob = await new Promise((r) => c.toBlob((b) => r(b!)));
-    (window as any).__editorStore
+    window.__editorStore
       .getState()
       .replaceImage(id, { src: URL.createObjectURL(blob), naturalWidth: 400, naturalHeight: 300 });
   }, id);
@@ -78,7 +79,7 @@ test('unsaved work asks before New project discards it', async ({ page }) => {
   let prompted = '';
   page.once('dialog', (d) => {
     prompted = d.message();
-    d.dismiss();
+    void d.dismiss();
   });
   await page.getByRole('button', { name: 'New project' }).click();
   expect(prompted).toContain('unsaved changes');
@@ -97,7 +98,7 @@ test('saved work is not prompted for', async ({ page }) => {
   let prompted = false;
   page.on('dialog', (d) => {
     prompted = true;
-    d.dismiss();
+    void d.dismiss();
   });
   await page.getByRole('button', { name: 'New project' }).click();
   expect(prompted).toBe(false);
@@ -122,8 +123,8 @@ test('an exported project file carries the background image, and importing resto
     page.waitForEvent('download'),
     page.getByRole('button', { name: /Export file/ }).click(),
   ]);
-  const path = (await download.path())!;
-  const file = JSON.parse(readFileSync(path, 'utf-8'));
+  const path = (await download.path());
+  const file = JSON.parse(readFileSync(path, 'utf-8')) as { canvas: { backgroundImageSrc?: string } };
   expect(file.canvas.backgroundImageSrc).toMatch(/^data:image\//);
 
   // Start over, then import the file.
@@ -158,6 +159,7 @@ test('hiding the page saves pending work when auto-save is on', async ({ page })
 });
 
 test('hiding the page saves nothing when auto-save is off', async ({ page }) => {
+  await act(page, 's.setAutoSaveEnabled(false)'); // on by default
   await addImage(page);
   await hidePage(page);
   await page.waitForTimeout(500);

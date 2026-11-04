@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useEditorStore } from '../store/useEditorStore';
+import { selectedPhotos, useEditorStore } from '../store/useEditorStore';
 import { searchPanelCommands, type PanelCommand } from '../style/commandIndex';
 
 /** Inspector-panel command search — an always-visible field at the top of
@@ -16,9 +16,8 @@ interface Props {
 export default function CommandSearch({ autoFocus = false, onDone }: Props) {
   const requestPanel = useEditorStore((s) => s.requestPanel);
   const selectedId = useEditorStore((s) => s.selectedId);
-  const selectedIsImage = useEditorStore(
-    (s) => s.items.find((i) => i.id === s.selectedId)?.type === 'image',
-  );
+  const selectionHasPhoto = useEditorStore((s) => selectedPhotos(s).length > 0);
+  const selectedIsText = useEditorStore((s) => s.items.find((i) => i.id === s.selectedId)?.type === 'text');
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -31,10 +30,6 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
   }, [autoFocus]);
 
   const results = searchPanelCommands(query);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
 
   // Closes the dropdown on outside click/tap, same pattern used elsewhere
   // in the toolbar for its overflow menu.
@@ -55,12 +50,13 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
   // StylePanel.tsx's own `if (!sel || sel.type !== 'image') return null;`) —
   // without that, requestPanel() would silently do nothing.
   const isUnavailable = (cmd: PanelCommand) =>
-    (cmd.requiresPhoto && !selectedIsImage) || (cmd.requiresSelection && !selectedId);
+    (cmd.requiresPhoto && !selectionHasPhoto) ||(cmd.requiresText && !selectedIsText) || (cmd.requiresSelection && !selectedId);
 
   const selectCommand = (cmd: PanelCommand) => {
     if (isUnavailable(cmd)) return;
     requestPanel(cmd.panel);
     setQuery('');
+    setActiveIndex(0);
     setShowResults(false);
     onDone?.();
   };
@@ -91,7 +87,9 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
         className="command-search-input"
         value={query}
         onChange={(e) => {
+          // A new query starts back at the top of its results.
           setQuery(e.target.value);
+          setActiveIndex(0);
           setShowResults(true);
         }}
         onFocus={() => setShowResults(true)}
@@ -106,6 +104,7 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
         <div className="overflow-menu command-search-results" role="listbox" id="command-search-listbox">
           {results.map((cmd, i) => {
             const disabled = isUnavailable(cmd);
+            const needs = cmd.requiresPhoto ? 'a photo' : cmd.requiresText ? 'a text box' : 'something';
             return (
               <button
                 key={cmd.label}
@@ -113,14 +112,14 @@ export default function CommandSearch({ autoFocus = false, onDone }: Props) {
                 role="option"
                 aria-selected={i === activeIndex}
                 disabled={disabled}
-                title={disabled ? (cmd.requiresPhoto ? 'Select a photo first' : 'Select something first') : undefined}
+                title={disabled ? `Select ${needs} first` : undefined}
                 onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => selectCommand(cmd)}
               >
                 {cmd.label}
                 {disabled && (
                   <span className="dim" style={{ marginLeft: 6, fontWeight: 400 }}>
-                    — {cmd.requiresPhoto ? 'select a photo' : 'select something'}
+                    — select {needs}
                   </span>
                 )}
               </button>

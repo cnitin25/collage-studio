@@ -11,6 +11,9 @@ export function isMac(): boolean {
   return /Mac|iPhone|iPad/.test(navigator.platform) || isIOS();
 }
 
+/** How shortcut keys are written in tooltips: ⌘Z on a Mac, Ctrl+Z elsewhere. */
+export const MOD = isMac() ? '⌘' : 'Ctrl+';
+
 /** Running as an installed Home Screen / desktop app rather than a browser tab. */
 export function isStandalone(): boolean {
   return (

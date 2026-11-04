@@ -1,12 +1,22 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import vercel from './vercel.json' with { type: 'json' };
+
+// `npm run preview` serves the production build with the same security
+// headers (CSP included) as Vercel, so a policy problem shows up locally
+// rather than in production. vercel.json stays the one place they're defined.
+const securityHeaders = Object.fromEntries(
+  (vercel.headers.find((rule) => rule.source === '/(.*)')?.headers ?? []).map((h) => [h.key, h.value]),
+);
 
 export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // A new version installs in the background and waits: UpdateBanner
+      // offers the reload, so the app is never swapped under someone's work.
+      registerType: 'prompt',
       includeAssets: ['icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable.png'],
       manifest: {
         name: 'Collage Studio',
@@ -29,14 +39,19 @@ export default defineConfig({
     }),
   ],
   server: { port: 5173, open: true },
+  preview: { headers: securityHeaders },
   build: {
-    rollupOptions: {
+    // The oldest browsers the app runs in at all (structuredClone and dvh
+    // need them), rather than Vite's default, which would also drop
+    // iOS 15.4–16.3 — the newest iOS some older iPhones can run.
+    target: ['chrome98', 'edge98', 'firefox94', 'safari15.4'],
+    rolldownOptions: {
       output: {
-        // Konva rarely changes between releases but is a large chunk of the
-        // bundle — splitting it out means an app-code update doesn't force
-        // users to re-download it, and the two chunks fetch in parallel.
-        manualChunks: {
-          konva: ['konva', 'react-konva'],
+        codeSplitting: {
+          // Konva rarely changes between releases but is a large chunk of the
+          // bundle — splitting it out means an app-code update doesn't force
+          // users to re-download it, and the two chunks fetch in parallel.
+          groups: [{ name: 'konva', test: /node_modules[\\/](konva|react-konva|react-reconciler|its-fine)[\\/]/ }],
         },
       },
     },

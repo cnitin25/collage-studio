@@ -15,6 +15,11 @@ function ratioLabel(w: number, h: number): string {
 
 export default function StatusBar() {
   const selectedId = useEditorStore((s) => s.selectedId);
+  const count = useEditorStore((s) => s.selectedIds.length);
+  const grouped = useEditorStore((s) => {
+    const sel = s.items.filter((i) => s.selectedIds.includes(i.id));
+    return sel.length > 1 && !!sel[0].groupId && sel.every((i) => i.groupId === sel[0].groupId);
+  });
   const items = useEditorStore((s) => s.items);
   const canvas = useEditorStore((s) => s.canvas);
   const viewScale = useEditorStore((s) => s.viewScale);
@@ -23,9 +28,12 @@ export default function StatusBar() {
   const sel = items.find((i) => i.id === selectedId);
 
   let primary: string;
-  let secondary: string | null = null;
+  let secondary: string | null;
 
-  if (!sel) {
+  if (count > 1) {
+    primary = grouped ? `Group of ${count}` : `${count} items selected`;
+    secondary = grouped ? null : 'Shift-click to add or remove';
+  } else if (!sel) {
     primary = `Canvas ${canvas.width} × ${canvas.height} px`;
     secondary = `Zoom ${Math.round(viewScale * 100)}%`;
   } else if (sel.type === 'image') {
