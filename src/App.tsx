@@ -21,7 +21,7 @@ import {
   savedRefOf,
 } from './store/useEditorStore';
 import { useThemeStore } from './store/useThemeStore';
-import { importPhotos } from './utils/importPhotos';
+import { importPhotos, withBusy } from './utils/importPhotos';
 import { canvasToBlob, maxExportScale, shareOrDownload } from './utils/exportStage';
 import { saveProject, type SaveResult } from './storage/projects';
 import { requestPersistentStorage } from './storage/persistence';
@@ -220,9 +220,13 @@ export default function App() {
   // Reloading into a new version keeps the work: auto-save stores it first,
   // and a save that fails keeps the page. With auto-save off, the browser's
   // "Leave site?" prompt guards unsaved work, as on any other reload.
-  const handleUpdateReload = useCallback(async () => {
-    if (await autoSaveNow.current()) reloadForUpdate();
-  }, []);
+  const handleUpdateReload = useCallback(
+    () =>
+      withBusy('Updating…', async () => {
+        if (await autoSaveNow.current()) await reloadForUpdate();
+      }),
+    [],
+  );
 
   // Closing the tab with unsaved work — or mid-save, which unloading would
   // cut short — gets the browser's "Leave site?" prompt.

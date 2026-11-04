@@ -158,7 +158,9 @@ never leave your device.
     (an open app checks hourly) and a notice under the toolbar offers
     **Reload** or **Later**: the app is never swapped out mid-edit, and
     Reload saves your work first (with auto-save on; off, the browser asks
-    before leaving unsaved work).
+    before leaving unsaved work). The notice goes away on its own after 12
+    seconds; the new version then starts once every tab of the app has been
+    closed.
   - A page left open across a release, whose on-demand code (the HEIC
     converter) is gone from the server, says the app was updated and offers
     the reload, instead of failing with an obscure error.
@@ -401,6 +403,8 @@ e2e/                        standalone Playwright project (its own
                              import/export, phone and sticker specs also run
                              on WebKit
   prod/production.spec.ts    production-build smoke test under the CSP
+  prod/update.spec.ts        taking a new version with real service workers,
+                             hard-reloaded pages included
                              (`npm run test:prod`)
   fixtures/                  a JPEG and a HEIC photo for the smoke test
   tests/
@@ -438,7 +442,8 @@ e2e/                        standalone Playwright project (its own
                              opacity vs shadow, masonry gaps, frame presets,
                              the missing-photo mark kept out of exports
     app-update.spec.ts       the update notice: Reload (saving first), Later,
-                             and code gone from the server after a release
+                             going away on its own, and code gone from the
+                             server after a release
     performance.spec.ts      dragging one item re-renders none of the others
     adjustments.spec.ts      the Adjust sliders' groups and undo steps; exposure,
                              highlights/shadows, vibrance, vignette and sharpen

@@ -33,6 +33,23 @@ test('Later puts the notice away', async ({ page }) => {
   await expect(notice(page)).toHaveCount(0);
 });
 
+test('the new-version notice goes away on its own', async ({ page }) => {
+  await page.clock.install();
+  await act(page, "s.setAppUpdate('new-version')");
+  await expect(notice(page)).toBeVisible();
+  await page.clock.fastForward(8000);
+  await expect(notice(page), 'long enough to read and act on').toBeVisible();
+  await page.clock.fastForward(5000);
+  await expect(notice(page)).toHaveCount(0);
+});
+
+test('a page that is out of date keeps saying so: something has already failed', async ({ page }) => {
+  await page.clock.install();
+  await act(page, "s.setAppUpdate('out-of-date')");
+  await page.clock.fastForward(60_000);
+  await expect(notice(page)).toBeVisible();
+});
+
 test('code that can no longer be fetched says the app was updated, and offers a reload', async ({ page }) => {
   // The HEIC converter loads on demand; after a release its old file is gone.
   await page.route(/heic-to/, (route) => route.abort());
